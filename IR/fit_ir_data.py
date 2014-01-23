@@ -3,6 +3,7 @@ import math
 import os
 import sys
 import matplotlib.pyplot as plt
+import matplotlib.lines as lin
 from minuit2 import Minuit2 as minuit
 from numpy  import *
 
@@ -118,9 +119,9 @@ printShift(nearside_old,nearside_new)
 def draw(old,new):
 
     circle1=plt.Circle((beampipe_x,beampipe_y),beampipe_r,color='0.8')
-    fig = plt.gcf()
+    fig = plt.figure(figsize=[4,4])
     fig.gca().add_artist(circle1)
-
+                   
     assert old.nsensors == new.nsensors
     data_old = []
     for i in range(0,old.nsensors):
@@ -128,7 +129,9 @@ def draw(old,new):
         
     if verbosity>1: print "drawing sensors:" << data_old ,"\n", [row[0] for row in data_old], [row[1] for row in data_old]
     plt.scatter([row[0] for row in data_old], [row[1] for row in data_old], s=5, alpha=0.5, color='r') #s=area
-
+                    
+    l = lin([0,100],[0,10])                                    
+    plt.axis.add_line(l)
 
     plt.xlabel('x [mm]')
     plt.ylabel('y [mm]')
