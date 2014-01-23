@@ -4,6 +4,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib.lines as lin
+import matplotlib.legend as pyleg
 from minuit2 import Minuit2 as minuit
 from numpy  import *
 
@@ -50,7 +51,7 @@ class castor_half():
                 pos = array(self.sensor_pos[i])
                 angle = self.sensor_angles[i]
                 r = self.rnew[i]
-                pointingat = pos - array([r * math.sin(radians(angle)), r * math.cos(radians(angle))])
+                pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
                 chi2 += distance_to_beampipe(pointingat[0]+x,pointingat[1]+y) ** 2 / sigma ** 2
             return chi2
         m = minuit(f)
@@ -59,7 +60,7 @@ class castor_half():
         self.x = m.values["x"]
         self.y = m.values["y"]
         chi2 = m.fval / self.nsensors
-        if verbosity > 0 :print "far half: " if self.isFarHalf else "near half: ","x={0:.2f} y={1:.2f} chi2={2:.2f}".format(self.x,self.y,chi2)
+        if verbosity > 0 :print "far half: " if self.isFarHalf else "near half: "," fitted position (x,y)=({0:.2f},{1:.2f}) with chi2={2:.2f}".format(self.x,self.y,chi2)
         return
 
 verbosity = 1 
@@ -75,12 +76,14 @@ far_r_old = [8.68439,20.2883] #top,bottom
 far_r_old_error = [0,0.00508586] #top,bottom
 farside_old = castor_half("farside_old",far_angles,far_pos,far_r_old)
 farside_old.setVerbosity(verbosity)
+print "Before B field"
 farside_old.fit_pos()
 
 far_r_new = [12.6556,22.2788] #top,bottom
 far_r_new_error = [0,0.00172011] #top,bottom
 farside_new = castor_half("farside_new",far_angles,far_pos,far_r_new)
 farside_new.setVerbosity(verbosity)
+print "After B field"
 farside_new.fit_pos()
 
 
@@ -96,12 +99,14 @@ near_r_old = [15.2248,25.8462] #top,bottom
 near_r_old_error = [0.00119269,0.0232433] #top,bottom
 nearside_old = castor_half("nearside_old",near_angles,near_pos,near_r_old)
 nearside_old.setVerbosity(verbosity)
+print "Before B field"
 nearside_old.fit_pos()
 
 near_r_new = [32.9261,32.6869] #top,bottom
 near_r_new_error = [2.44163e-15,0.00781898] #top,bottom
 nearside_new = castor_half("nearside_new",near_angles,near_pos,near_r_new)
 nearside_new.setVerbosity(verbosity)
+print "After B field"
 nearside_new.fit_pos()
 
 
@@ -116,32 +121,66 @@ print("\n\n")
 printShift(farside_old,farside_new)
 printShift(nearside_old,nearside_new)
 
-def draw(old,new):
+fig = plt.figure(figsize=[8,8])
 
-    circle1=plt.Circle((beampipe_x,beampipe_y),beampipe_r,color='0.8')
-    fig = plt.figure(figsize=[4,4])
-    fig.gca().add_artist(circle1)
+def draw(fig,old,new):
+    ax = fig.gca()
+
+    circle1=plt.Circle((beampipe_x,beampipe_y),beampipe_r,color='0.8',fill=False,label="beampipe")
+    ax.add_artist(circle1)
+
+    leglables=["beampipe"]
+    legpointers=[circle1]
                    
     assert old.nsensors == new.nsensors
-    data_old = []
-    for i in range(0,old.nsensors):
-        data_old.append([old.sensor_pos[i][0]+old.x,old.sensor_pos[i][1]+old.y])
-        
-    if verbosity>1: print "drawing sensors:" << data_old ,"\n", [row[0] for row in data_old], [row[1] for row in data_old]
-    plt.scatter([row[0] for row in data_old], [row[1] for row in data_old], s=5, alpha=0.5, color='r') #s=area
+
+    def drawSensor(label,color,pos,pointingat):
+       sightline = lin.Line2D( [pos[0],pointingat[0]] , [pos[1],pointingat[1]], color=color, label=label)
+       ax.add_artist(sightline)
+       sensor=plt.Circle((pos[0],pos[1]),3,color=color,fill=True, alpha=0.5)
+       ax.add_artist(sensor)
+       if(label): legpointers.append(sensor)
+       if(label): leglables.append(label)
                     
-    l = lin([0,100],[0,10])                                    
-    plt.axis.add_line(l)
+    for i in range(0,old.nsensors):
+        pos = array(old.sensor_pos[i])
+        angle = old.sensor_angles[i]
+        r = old.rnew[i]
+        shift = array([old.x,old.y])
+        pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
+
+        #draw ideal position
+        drawSensor("ideal" if i==0 else "","0.8",pos,pointingat);
+        
+        #draw fitted old position
+        drawSensor("before B" if i==0 else "","r",pos+shift,pointingat+shift);
+
+        pos = array(new.sensor_pos[i])
+        angle = new.sensor_angles[i]
+        r = new.rnew[i]
+        shift = array([new.x,new.y])
+        pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
+
+        #draw fitted new position
+        drawSensor("after b" if i==0 else "","g",pos+shift,pointingat+shift);
+
+        print pos , "\n", array([r * math.cos(radians(angle)), r * math.sin(radians(angle))]), "\n", pointingat, "\n\n"
+        
 
     plt.xlabel('x [mm]')
     plt.ylabel('y [mm]')
     plt.title('IR Sensor [Jan 07 -> Jan 17]')
     #plt.text(60, .025, r'$\mu=100,\ \sigma=15$')
-    plt.axis([-50, 50, -50, 50])
-    
-    plt.savefig("test.png")
 
-draw(farside_old,farside_new)
+    
+    plt.axis([-60, 60, -60, 60])
+
+    leg = ax.legend(legpointers,leglables,loc='upper right', fancybox=True)
+    
+
+draw(fig,farside_old,farside_new)
+draw(fig,nearside_old,nearside_new)
+plt.savefig("test.png",bbox_inches="tight")
 
 # e = np.e
 # X, Y = np.meshgrid(np.linspace(0, castor_inner_octant_radius, 100), np.linspace(0, castor_inner_octant_radius, 100))
