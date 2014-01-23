@@ -19,10 +19,16 @@ def distance_to_beampipe( x , y ):
    return math.fabs(beampipe_r - r);
 
 class castor_half():
-    def __init__(self, isFarHalf,sensor_angles,sensor_pos,rnew):
+    def __init__(self, name,sensor_angles,sensor_pos,rnew):
         assert len(sensor_angles) == len(rnew), '#angles must be #rnew'
         assert len(sensor_angles) == len(sensor_pos), '#angles must be #positions'
-        self.far = isFarHalf
+        if name.find("far") != -1:
+            self.isFarHalf = true
+        else if name.find("near") != -1
+            self.isFarHalf = false
+        else
+            sys.stderr.write("Please choose name with either \"near\" or \"far\" in it")
+            exit(1)
         self.sensor_angles = sensor_angles
         self.sensor_pos = sensor_pos #in ideal geometry
         self.rnew = rnew
@@ -61,12 +67,14 @@ for angle in far_angles:
 print("Position of far side sensors is: ", far_pos)
 
 far_r_old = [10,15]
-farside_old = castor_half(1,far_angles,far_pos,far_r_old)
+farside_old = castor_half("farside_old",far_angles,far_pos,far_r_old)
 farside_old.setVerbosity(verbosity)
 farside_old.fit_pos()
 
 far_r_new = [10,20]
-farside_new = castor_half(1,far_angles,far_pos,far_r_new)
+farside_new = castor_half("farside_new",far_angles,far_pos,far_r_new)
 farside_new.setVerbosity(verbosity)
 farside_new.fit_pos()
+
+print("Shift due to magnetic field:" 
 
