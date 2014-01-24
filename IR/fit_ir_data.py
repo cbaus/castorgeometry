@@ -1,3 +1,4 @@
+from __future__ import division #always float divisions for python 2.x
 import numpy as np
 import math
 import os
@@ -21,8 +22,8 @@ def distance_to_beampipe( x , y , xe=0 , ye=0 ):
    global beampipe_r
    r = math.sqrt((x-beampipe_x)**2 + (y-beampipe_y)**2)
    distance = math.fabs(beampipe_r - r);
-   ddisdx = 1 / r * 2 * (x-beampipe_x)
-   ddisdy = 1 / r * 2 * (y-beampipe_y)
+   ddisdx = 1 / 2 / r * 2 * (x-beampipe_x)
+   ddisdy = 1 / 2 / r * 2 * (y-beampipe_y)
    error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
    return distance , error
 
@@ -60,7 +61,7 @@ class castor_half():
 
                 pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
 
-                error_r = sqrt(0.5**2 + r_error**2) #0.5mm sys + stat error
+                error_r = sqrt(1**2 + r_error**2) #1mm sys + stat error
                 error_theta = radians(1)
 
                 dpxdr     = -math.cos(radians(angle))
@@ -72,8 +73,8 @@ class castor_half():
                 ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
 
                 delta,sigma = distance_to_beampipe(pointingat[0]+x,pointingat[1]+y, xe, ye)
+                if self.verbosity>1: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
                 chi2 += delta ** 2 / sigma ** 2
-                if self.verbosity>2: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
                 
             return chi2
         m = minuit(f)
@@ -220,8 +221,6 @@ def draw(fig,old,new):
                           # xytext is offset points from "xy=(0.5, 0), xycoords=at"
                           va="top", ha="center",
                           bbox=dict(boxstyle="round", fc="w"))
-
-        if verbosity > 1: print pos , "\n", array([r * math.cos(radians(angle)), r * math.sin(radians(angle))]), "\n", pointingat, "\n\n"
 
 plt.xlabel('x [mm]')
 plt.ylabel('y [mm]')
