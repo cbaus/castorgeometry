@@ -14,13 +14,17 @@ beampipe_r = (57+0.5)/2 #in mm #+white paper = 0.5mm
 beampipe_x = -0.7 #hauke's value
 beampipe_y = -1.4
 
-def distance_to_beampipe( x , y ):
+def distance_to_beampipe( x , y , xe=0 , ye=0 ):
    "calculate distance for any given point to beam pipe outer circle"
    global beampipe_x
    global beampipe_y
    global beampipe_r
    r = math.sqrt((x-beampipe_x)**2 + (y-beampipe_y)**2)
-   return math.fabs(beampipe_r - r);
+   distance = math.fabs(beampipe_r - r);
+   ddisdx = 1 / r * 2 * (x-beampipe_x)
+   ddisdy = 1 / r * 2 * (y-beampipe_y)
+   error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
+   return distance , error
 
 class castor_half():
     def __init__(self, name,sensor_angles,sensor_pos,r,r_error):
@@ -53,12 +57,24 @@ class castor_half():
                 angle = self.sensor_angles[i]
                 r = self.r[i]
                 r_error = self.r_error[i]
+
                 pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
-                sigmar = sqrt(1**2 + r_error**2)
-                sigmax = sqrt(2) #if x~y then dr ~ sqrt(2) dx =>
-                sigmaangle = radians(1)
-                sigma = sqrt(sigmax**2 + (math.sin(radians(angle)) * r * sigmaangle)**2 + (math.cos(radians(angle)) * sigmar)**2)
-                chi2 += distance_to_beampipe(pointingat[0]+x,pointingat[1]+y) ** 2 / sigma ** 2
+
+                error_r = sqrt(0.5**2 + r_error**2) #0.5mm sys + stat error
+                error_theta = radians(1)
+
+                dpxdr     = -math.cos(radians(angle))
+                dpxdtheta = r * math.sin(radians(angle))
+                dpydr     = -math.sin(radians(angle))
+                dpydtheta = -r * math.cos(radians(angle))
+
+                xe = sqrt( error_r**2 * dpxdr**2 + error_theta**2 * dpxdtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
+                ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
+
+                delta,sigma = distance_to_beampipe(pointingat[0]+x,pointingat[1]+y, xe, ye)
+                chi2 += delta ** 2 / sigma ** 2
+                if self.verbosity>2: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
+                
             return chi2
         m = minuit(f)
         if verbosity > 1 : m.printMode = 1
@@ -71,7 +87,7 @@ class castor_half():
         self.xel = m.merrors["x", -1]
         self.yel = m.merrors["y", -1]
         chi2 = m.fval / self.nsensors
-        if verbosity > 0 :print "far half: " if self.isFarHalf else "near half: "," fitted position (x,y)=({0:.2f}{0:.2f}{0:.2f},{1:.2f}{0:.2f}{0:.2f}) with chi2={2:.2f}".format(self.x,self.y,self.xeu,self.xel,self.yeu,self.yel,chi2)
+        if verbosity > 0 :print "far half: " if self.isFarHalf else "near half: "," fitted position (x,y)=({0:.2f}{1:+.2f}{2:+.2f},{3:.2f}{4:+.2f}{5:+.2f}) with chi2={6:.2f}".format(self.x,self.xeu,self.xel,self.y,self.yeu,self.yel,chi2)
         return
 
 #FITTING
@@ -191,14 +207,14 @@ def draw(fig,old,new):
                 )
 
 
-        text = ("Far" if new.isFarHalf else "Near") + " (without B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(old.x,old.xeu,old.y,old.yeu)
+        text = ("Far" if new.isFarHalf else "Near") + " (without B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(old.x,(old.xeu-old.xel)/2,old.y,(old.yeu-old.yel)/2)
         an1 = ax.annotate(text, xy=(0.02 if new.isFarHalf else 0.59,0.97), xycoords="axes fraction",
                   va="top", ha="left" if new.isFarHalf else "right",
                   bbox=dict(boxstyle="round", fc="w"))
 
         from matplotlib.text import OffsetFrom
         offset_from = OffsetFrom(an1, (0.5, 0))
-        text = ("Far" if new.isFarHalf else "Near") + " (with B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(new.x,new.xeu,new.y,new.yeu)
+        text = ("Far" if new.isFarHalf else "Near") + " (with B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(new.x,(new.xeu-new.xel)/2,new.y,(new.yeu-new.yel)/2)
         an2 = ax.annotate(text, xy=(0.1, 0.1), xycoords="data",
                           xytext=(0, -10), textcoords=offset_from,
                           # xytext is offset points from "xy=(0.5, 0), xycoords=at"
