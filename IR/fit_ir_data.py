@@ -9,10 +9,10 @@ import matplotlib.legend as pyleg
 from minuit2 import Minuit2 as minuit
 from numpy  import *
 
-castor_inner_octant_radius = 41
+castor_inner_octant_radius = 45
 beampipe_r = (57+0.5)/2 #in mm #+white paper = 0.5mm
-beampipe_x = 0
-beampipe_y = 0
+beampipe_x = -0.7 #hauke's value
+beampipe_y = -1.4
 
 def distance_to_beampipe( x , y ):
    "calculate distance for any given point to beam pipe outer circle"
@@ -23,9 +23,9 @@ def distance_to_beampipe( x , y ):
    return math.fabs(beampipe_r - r);
 
 class castor_half():
-    def __init__(self, name,sensor_angles,sensor_pos,rnew,rnew_error):
+    def __init__(self, name,sensor_angles,sensor_pos,r,r_error):
         self.nsensors = len(sensor_angles)
-        assert  self.nsensors == len(rnew), '#angles must be #rnew'
+        assert  self.nsensors == len(r), '#angles must be #r'
         assert  self.nsensors == len(sensor_pos), '#angles must be #positions'
         if name.find("far") != -1:
             self.isFarHalf = True
@@ -36,8 +36,8 @@ class castor_half():
             exit(1)
         self.sensor_angles = sensor_angles #x direction is 0. counter-clockwise
         self.sensor_pos = sensor_pos #in ideal geometry
-        self.rnew = rnew
-        self.rnew_error = rnew_error #from averaging r (negligible)
+        self.r = r
+        self.r_error = r_error #from averaging r (negligible)
         self.verbosity = 1
 
     def setVerbosity(self, verbosity):
@@ -51,8 +51,8 @@ class castor_half():
             for i in range(0,self.nsensors):
                 pos = array(self.sensor_pos[i])
                 angle = self.sensor_angles[i]
-                r = self.rnew[i]
-                r_error = self.rnew_error[i]
+                r = self.r[i]
+                r_error = self.r_error[i]
                 pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
                 sigmar = sqrt(1**2 + r_error**2)
                 sigmax = sqrt(2) #if x~y then dr ~ sqrt(2) dx =>
@@ -158,9 +158,9 @@ def draw(fig,old,new):
     for i in range(0,old.nsensors):
         pos = array(old.sensor_pos[i])
         angle = old.sensor_angles[i]
-        r = old.rnew[i]
+        rold = old.r[i]
         shift = array([old.x,old.y])
-        pointingat = pos - array([r * math.cos(radians(angle)), r * math.sin(radians(angle))])
+        pointingat = pos - array([rold * math.cos(radians(angle)), rold * math.sin(radians(angle))])
 
         #draw ideal position
         drawSensor("nominal position" if i==0 else "","0.8",pos,pointingat);
@@ -170,7 +170,7 @@ def draw(fig,old,new):
 
         posnew = array(new.sensor_pos[i])
         anglenew = new.sensor_angles[i]
-        rnew = new.rnew[i]
+        rnew = new.r[i]
         shiftnew = array([new.x,new.y])
         pointingatnew = posnew - array([rnew * math.cos(radians(angle)), rnew * math.sin(radians(angle))])
 
@@ -218,5 +218,6 @@ draw(fig,nearside_old,nearside_new)
 
 plt.axis([-70, 70, -60, 80]) #make it square
 
-plt.savefig("test.png",bbox_inches="tight")
+plt.savefig("ir_IP_pos.png",bbox_inches="tight")
+plt.savefig("ir_IP_pos.pdf",bbox_inches="tight")
 
