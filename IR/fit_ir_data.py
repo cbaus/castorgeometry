@@ -10,7 +10,7 @@ from minuit2 import Minuit2 as minuit
 from numpy  import *
 
 castor_inner_octant_radius = 41
-beampipe_r = 57/2 #in mm
+beampipe_r = (57+0.5)/2 #in mm #+white paper = 0.5mm
 beampipe_x = 0
 beampipe_y = 0
 
@@ -166,7 +166,7 @@ def draw(fig,old,new):
         drawSensor("nominal position" if i==0 else "","0.8",pos,pointingat);
 
         #draw fitted old position
-        drawSensor("w/ B field" if i==0 else "","r",pos+shift,pointingat+shift);
+        drawSensor("w/o B field" if i==0 else "","r",pos+shift,pointingat+shift);
 
         posnew = array(new.sensor_pos[i])
         anglenew = new.sensor_angles[i]
@@ -175,7 +175,7 @@ def draw(fig,old,new):
         pointingatnew = posnew - array([rnew * math.cos(radians(angle)), rnew * math.sin(radians(angle))])
 
         #draw fitted new position
-        drawSensor("w/o B field" if i==0 else "","g",posnew+shiftnew,pointingatnew+shiftnew);
+        drawSensor("w B field" if i==0 else "","g",posnew+shiftnew,pointingatnew+shiftnew);
 
         #arrows and text
         ax.annotate("",
@@ -190,14 +190,20 @@ def draw(fig,old,new):
                                 ),
                 )
 
-        from mpl_toolkits.axes_grid.anchored_artists import AnchoredText
+
+        text = ("Far" if new.isFarHalf else "Near") + " (without B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(old.x,old.xeu,old.y,old.yeu)
+        an1 = ax.annotate(text, xy=(0.02 if new.isFarHalf else 0.59,0.97), xycoords="axes fraction",
+                  va="top", ha="left" if new.isFarHalf else "right",
+                  bbox=dict(boxstyle="round", fc="w"))
+
+        from matplotlib.text import OffsetFrom
+        offset_from = OffsetFrom(an1, (0.5, 0))
         text = ("Far" if new.isFarHalf else "Near") + " (with B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(new.x,new.xeu,new.y,new.yeu)
-        at = AnchoredText(text,
-                          prop=dict(size=8), frameon=True,
-                          loc=2 if new.isFarHalf else 9,
-                          )
-        #at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-        ax.add_artist(at)
+        an2 = ax.annotate(text, xy=(0.1, 0.1), xycoords="data",
+                          xytext=(0, -10), textcoords=offset_from,
+                          # xytext is offset points from "xy=(0.5, 0), xycoords=at"
+                          va="top", ha="center",
+                          bbox=dict(boxstyle="round", fc="w"))
 
         if verbosity > 1: print pos , "\n", array([r * math.cos(radians(angle)), r * math.sin(radians(angle))]), "\n", pointingat, "\n\n"
 
