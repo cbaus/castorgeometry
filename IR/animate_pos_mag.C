@@ -71,8 +71,11 @@ void animate_pos_mag()
           comp1_selec << varname.str() << " < 100 && Timestamp >= " << comp1_start << " && Timestamp < " << comp1_end;
           comp2_selec << varname.str() << " < 100 && Timestamp >= " << comp2_start << " && Timestamp < " << comp2_end;
 
+          TCanvas* c1 = new TCanvas;
           access->Draw((varname.str()+string(":Timestamp")).c_str(),comp1_selec.str().c_str());
           TGraph* comp1_hist = (TGraph*)(gROOT->FindObject("Graph")->Clone());
+          
+          TCanvas* c2 = new TCanvas;
           access->Draw((varname.str()+string(":Timestamp")).c_str(),comp2_selec.str().c_str());
           TGraph* comp2_hist = (TGraph*)gPad->GetPrimitive("Graph")->Clone(); //stupid root deletes graphs
 
