@@ -1,4 +1,4 @@
-from __future__ import division #always float divisions for python 2.x
+from __future__ import division #always float divisions for python version < 3.0
 import numpy as np
 import math
 import os
@@ -7,13 +7,22 @@ import matplotlib.pyplot as plt
 import matplotlib.lines as lin
 import matplotlib.patches as pat
 import matplotlib.legend as pyleg
-from minuit2 import Minuit2 as minuit
+from minuit2 import Minuit2 as minuit #minuit2.so needed. Please compile yourself
 from numpy  import *
 
-castor_inner_octant_radius = 45
+castor_inner_octant_radius = 40.6507 #cos(22.5) * 44
 beampipe_r = (57+0.5)/2 #in mm #+white paper = 0.5mm
 beampipe_x = -0.7 #hauke's value
 beampipe_y = -1.4
+
+def rotatePoint(centerPoint,point,angle):
+    """Rotates a point around another centerPoint. Angle is in degrees.
+    Rotation is counter-clockwise"""
+    angle = math.radians(angle)
+    temp_point = point[0]-centerPoint[0] , point[1]-centerPoint[1]
+    temp_point = ( temp_point[0]*math.cos(angle)-temp_point[1]*math.sin(angle) , temp_point[0]*math.sin(angle)+temp_point[1]*math.cos(angle))
+    temp_point = temp_point[0]+centerPoint[0] , temp_point[1]+centerPoint[1]
+    return temp_point
 
 def distance_to_beampipe( x , y , xe=0 , ye=0 ):
    "calculate distance for any given point to beam pipe outer circle"
@@ -95,12 +104,13 @@ class castor_half():
 verbosity = 1
 
 #FAR SIDE
-far_angles = [180-22.5,180+67.5]
+far_parameters = [ [180-22.5,-6.5,10] , [180+67.5,-6.5,10] ] #angle,laser is off-center unrotated y-direction in mm, zeroshift means distance when touching the metal in mm
+far_angles = [row[0] for row in far_parameters]
 far_pos = []
-for angle in far_angles:
-    far_pos.append([math.cos(math.radians(angle))*castor_inner_octant_radius , math.sin(math.radians(angle))*castor_inner_octant_radius])
+for angle,offcenter,zeroshift in far_parameters:
+    far_pos.append(rotatePoint([0,0],[castor_inner_octant_radius+zeroshift,offcenter], angle))
 if verbosity > 0:
-    print "\nPosition of far side sensors is: "
+    print "\nPositions of -far side- sensors are: "
     for pos in far_pos: print "{0[0]:.3f},{0[1]:.3f}".format(pos)
 
 far_r_old = [8.68439,20.2883] #top,bottom
@@ -118,12 +128,13 @@ print "After B field"
 farside_new.fit_pos()
 
 #NEAR SIDE
-near_angles = [22.5,-67.5]
+near_parameters = [ [22.5,-6.5,10] , [-67.5,-6.5,10] ]
+near_angles = [row[0] for row in near_parameters]
 near_pos = []
-for angle in near_angles:
-    near_pos.append([math.cos(math.radians(angle))*castor_inner_octant_radius , math.sin(math.radians(angle))*castor_inner_octant_radius])
+for angle,offcenter,zeroshift in near_parameters:
+    near_pos.append(rotatePoint([0,0],[castor_inner_octant_radius+zeroshift,offcenter], angle))
 if verbosity > 0:
-    print "\nPosition of near side sensors is: "
+    print "\nPositions of -near side- sensors are: "
     for pos in near_pos: print "{0[0]:.3f},{0[1]:.3f}".format(pos)
 
 near_r_old = [15.2248,25.8462] #top,bottom
@@ -154,7 +165,7 @@ printShift(nearside_old,nearside_new)
 fig = plt.figure(figsize=[8,8])
 ax = fig.gca()
 
-circle1=plt.Circle((beampipe_x,beampipe_y),beampipe_r,color='0.8',fill=False,label="beampipe")
+circle1=plt.Circle((beampipe_x,beampipe_y),beampipe_r,color='0.5',fill=False,label="beampipe")
 ax.add_artist(circle1)
 
 leglables=["beampipe"]
@@ -180,7 +191,7 @@ def draw(fig,old,new):
         pointingat = pos - array([rold * math.cos(radians(angle)), rold * math.sin(radians(angle))])
 
         #draw ideal position
-        drawSensor("nominal position" if i==0 else "","0.8",pos,pointingat);
+        drawSensor("nominal position" if i==0 else "","0.5",pos,pointingat); #no name skips label for i>1, 0.5 is grey colour
 
         #draw fitted old position
         drawSensor("w/o B field" if i==0 else "","r",pos+shift,pointingat+shift);
