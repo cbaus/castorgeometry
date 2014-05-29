@@ -66,8 +66,8 @@ class castor_half():
                 r = iSen.GetCalibratedDist()
                 pointingat = iSen.pos - array([r * math.cos(radians(iSen.angle)), r * math.sin(radians(iSen.angle))])
 
-                error_r = sqrt(1**2 + iSen.GetDistError()**2) #1mm sys + stat error
-                error_theta = radians(1)
+                error_r = sqrt(2**2 + iSen.GetDistError()**2) #1mm sys + stat error
+                error_theta = radians(1.5) #deg systematic uncertainty
 
                 dpxdr     = -math.cos(radians(iSen.angle))
                 dpxdtheta = r * math.sin(radians(iSen.angle))
@@ -127,6 +127,18 @@ class sensor():
         self.cal_true = true
         assert len(self.cal_meas) == len(self.cal_true), 'error in calibration data'
         self.cal_spline = UnivariateSpline(self.cal_meas,self.cal_true,k=2)
+
+    def DrawCalibration(self,name):
+        fig = plt.figure(figsize=[8,8])
+        ax = fig.gca()
+        plt.plot(self.cal_meas, self.cal_true, 'bs')
+        xcal = linspace(-5, 40, 1000)
+        ycal = self.cal_spline(xcal)
+        plt.plot(xcal, ycal)
+        plt.xlabel('measured [mm]')
+        plt.ylabel('truth [mm]')
+        plt.title('Sensors (IP side) {name}'.format(name=name.replace("_"," ")))
+        plt.savefig("ir_sens_calib_{name}.png".format(name=name))
         
     def GetCalibratedDist(self): #apply zero shift and linearity from measurement
         """apply calibration and return distance. if outside of calibration data it will be extrapolated"""
@@ -162,8 +174,11 @@ sensor_farbot = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter],
 sensor_fartop.SetDist(8.68439-1,0)
 sensor_farbot.SetDist(20.2883-1,0.00508586)
 
-sensor_fartop.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
-sensor_farbot.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
+sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
+sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
+
+sensor_fartop.DrawCalibration("Far_Top")
+sensor_farbot.DrawCalibration("Far_Bot")
 
 farside_old = castor_half("farside_old",[sensor_fartop,sensor_farbot])
 farside_old.setVerbosity(verbosity)
@@ -187,12 +202,14 @@ if verbosity > 0:
 sensor_neartop = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 67.5), 67.5) #offcenter applied to y position unrotated. this is correct (clockwise)
 sensor_nearbot = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -22.5), -22.5)
 
-sensor_neartop.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
-sensor_nearbot.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
+sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
+sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
+
+sensor_neartop.DrawCalibration("Near_Top")
+sensor_nearbot.DrawCalibration("Near_Bot")
 
 sensor_neartop.SetDist(15.2248-2,0.00119269)
 sensor_nearbot.SetDist(25.8462-2,0.0232433)
-
 
 nearside_old = castor_half("nearside_old",[sensor_neartop,sensor_nearbot])
 nearside_old.setVerbosity(verbosity)
@@ -201,6 +218,7 @@ nearside_old.fit_pos()
 
 sensor_neartop = sensor.fromsensor(sensor_neartop)
 sensor_nearbot = sensor.fromsensor(sensor_nearbot)
+
 sensor_neartop.SetDist(32.9261-2,2.44163e-15)
 sensor_nearbot.SetDist(32.6869-2,0.00781898)
 
@@ -319,7 +337,7 @@ draw(fig,farside_old,farside_new)
 leg = ax.legend(legpointers,leglables,loc='upper right', fancybox=True)
 draw(fig,nearside_old,nearside_new)
 
-plt.axis([-70, 70, -60, 80]) #make it square
+plt.axis([-70, 70, -50, 90]) #make it square
 
 plt.savefig("ir_IP_pos.png",bbox_inches="tight")
 plt.savefig("ir_IP_pos.pdf",bbox_inches="tight")
