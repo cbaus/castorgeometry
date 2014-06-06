@@ -54,34 +54,44 @@ class castor_half():
         self.sensors = sensors #x direction is 0. counter-clockwise
         self.verbosity = 1
 
-    def setVerbosity(self, verbosity):
+    def SetVerbosity(self, verbosity):
         #0: no output, 1:essential results, 2:everything
         self.verbosity = verbosity
 
-    def fit_pos(self):
-        def f(x,y):
-            #chi2 function. returns distance to beam pipe circle for all vector(sensorpos)-vector(r) for given (x,y) shift
-            chi2 = 0
-            for iSen in self.sensors:
-                r = iSen.GetCalibratedDist()
-                pointingat = iSen.pos - array([r * math.cos(radians(iSen.angle)), r * math.sin(radians(iSen.angle))])
+    def GetChi2(self):
+        """chi2 function. loops over sensors and adds up chi2. Return chi2,ndf"""
+        chi2 = 0
+        for iSen in self.sensors:
+            chi2 += iSen.GetChi2()
+        ndf = len(self.sensors);
+        return chi2,ndf
 
-                error_r = sqrt(2**2 + iSen.GetDistError()**2) #1mm sys + stat error
-                error_theta = radians(1.5) #deg systematic uncertainty
+class castor():
+    """Class object to store both halves and sensors (e.g. potentiometers) that are connected to both halves"""
+    def __init__(self, name,sensors):
+        self.nsensors = len(sensors)
+        self.sensors = sensors #x direction is 0. counter-clockwise
+        self.verbosity = 1
+        self.half = {}
 
-                dpxdr     = -math.cos(radians(iSen.angle))
-                dpxdtheta = r * math.sin(radians(iSen.angle))
-                dpydr     = -math.sin(radians(iSen.angle))
-                dpydtheta = -r * math.cos(radians(iSen.angle))
+    def checkConsistency(self):
+        assert len(self.half)==2,"Two halfes needed in castor instance"
 
-                xe = sqrt( error_r**2 * dpxdr**2 + error_theta**2 * dpxdtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
-                ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
+    def addHalf(self, half):
+        """add half"""
+        half.SetVerbosity(self.verbosity)
+        self.half["far" if half.isFarHalf else "near"] = half
 
-                delta,sigma = distance_to_beampipe(pointingat[0]+x,pointingat[1]+y, xe, ye)
-                if self.verbosity>1: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
-                chi2 += delta ** 2 / sigma ** 2
-                
-            return chi2
+    def fit(self):
+        self.checkConsistency()
+        chi2 = 0.
+        ndf = 0
+
+        for iHalf in self.half:
+            c,n=half.GetChi2()
+            chi2 += c
+            ndf += n
+            
         m = minuit(f)
         if verbosity > 1 : m.printMode = 1
         m.migrad()
@@ -98,7 +108,7 @@ class castor_half():
 
 class sensor():
     """stores information about position and angle about each sensor"""        
-    def __init__(self, pos, angle):
+    def __init__(self, pos, angle,name):
         """angle counter clock-wise in deg [-180,180] starting from 3pm looking from IP"""
         self.pos = pos
         self.angle = angle
@@ -107,6 +117,7 @@ class sensor():
         self.cal_meas = []
         self.cal_true = []
         self.verbosity = 1
+        self.name = name
 
         assert len(self.pos) == 2, 'pos must be provided as list [x,y]'
         assert -180 < self.angle < 180, 'error with angle for sensor'
@@ -114,12 +125,14 @@ class sensor():
         if self.verbosity > 0:
             print "             nominal position (x,y)=({0[0]:.2f},{0[1]:.2f})".format(self.pos)
     @classmethod
-    def fromsensor(cls, sensor): #copy constructor
+    def fromsensor(cls, sensor):
+        """copy constructor"""
         new = cls(sensor.pos,sensor.angle)
+        new.verbosity = sensor.verbosity
+        new.name = sensor.name
         new.SetCalibrationData(sensor.cal_meas,sensor.cal_true)
         new.SetDist(sensor.meas_r,sensor.meas_r_err)
         return new
-
 
     def SetCalibrationData(self,meas,true):
         """set measured calibration data. like [-1.2, 10.1, 20.4] and [0, 10, 20]"""
@@ -128,19 +141,21 @@ class sensor():
         assert len(self.cal_meas) == len(self.cal_true), 'error in calibration data'
         self.cal_spline = UnivariateSpline(self.cal_meas,self.cal_true,k=2)
 
-    def DrawCalibration(self,name):
+    def DrawCalibration(self):
+        """Draws plot for calibration data by SetData()"""
         fig = plt.figure(figsize=[8,8])
         ax = fig.gca()
         plt.plot(self.cal_meas, self.cal_true, 'bs')
         xcal = linspace(-5, 40, 1000)
         ycal = self.cal_spline(xcal)
-        plt.plot(xcal, ycal)
+        plt.plot([-5,40], [-5,40],"-k")
+        plt.plot(xcal, ycal,"-b",lw=2)
         plt.xlabel('measured [mm]')
         plt.ylabel('truth [mm]')
-        plt.title('Sensors (IP side) {name}'.format(name=name.replace("_"," ")))
-        plt.savefig("ir_sens_calib_{name}.png".format(name=name))
+        plt.title('Sensors (IP side) {name}'.format(name=self.name.replace("_"," ")))
+        plt.savefig("ir_sens_calib_{name}.png".format(name=self.name.replace(" ","_")))
         
-    def GetCalibratedDist(self): #apply zero shift and linearity from measurement
+    def GetCalibratedDist(self):
         """apply calibration and return distance. if outside of calibration data it will be extrapolated"""
         if (self.cal_spline):
             return self.cal_spline(self.meas_r)[0]
@@ -158,18 +173,55 @@ class sensor():
     def SetDist(self,r,r_err):
         self.meas_r = r
         self.meas_r_err = r_err
+
+    def _GetPointingAt(self):
+        """calculates pos + r in direction of angle"""
+        return self.pos - array([r * math.cos(radians(self.angle)), r * math.sin(radians(self.angle))])
+
+    def _AwayFromTarget(self):
+
+    def GetChi2(self):
+        """returns distance to beam pipe circle for all vector(sensorpos)-vector(r) for given (x,y) shift"""
+        r = self.GetCalibratedDist()
+        pointingat = self._GetPointingAt()
+
+        error_r = sqrt(2**2 + self.GetDistError()**2) #1mm sys + stat error
+        error_theta = radians(1.5) #deg systematic uncertainty
+
+        dpxdr     = -math.cos(radians(self.angle))
+        dpxdtheta = r * math.sin(radians(self.angle))
+        dpydr     = -math.sin(radians(self.angle))
+        dpydtheta = -r * math.cos(radians(self.angle))
+
+        xe = sqrt( error_r**2 * dpxdr**2 + error_theta**2 * dpxdtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
+        ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
+
+        delta,sigma = distance_to_beampipe(pointingat[0]+x,pointingat[1]+y, xe, ye)
+        if self.verbosity>1: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
+
+        return delta ** 2 / sigma ** 2
+
+class infraredSensor(sensor):
+    """subclass of sensor that measures the distance to mount or opening"""
+    def __init__(self,pos,angle):
+        sensor.__init__(pos,angle)
+
+class potentioMeter(sensor):
+    """subclass of sensor that measures the distance to mount or opening"""
+    def __init__(self,pos,angle):
+        sensor.__init__(pos,angle)
         
 ####FITTING####
 verbosity = 1
 offcenter = -6.35 #mm distance because the sending device is not in the middle of the housing
 
-####FITTING FAR SIDE####
+####FITTING OLD CASTOR####
 #parameters are [angle, off-center unrotated laser y-direction in mm, zeroshift means distance when touching the metal in mm]
 if verbosity > 0:
     print "\nPositions of -far side- sensors are: "
 
-sensor_fartop = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 180-67.5), 180-67.5) #offcenter applied to y position unrotated. this is correct (clockwise)
-sensor_farbot = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -180+22.5), -180+22.5)
+sensor_fartop = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 180-67.5), 180-67.5, "far top") #offcenter applied to y position unrotated. this is correct (clockwise)
+sensor_farbot = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -180+22.5), -180+22.5, "far bot")
                      
 sensor_fartop.SetDist(8.68439-1,0)
 sensor_farbot.SetDist(20.2883-1,0.00508586)
@@ -177,13 +229,36 @@ sensor_farbot.SetDist(20.2883-1,0.00508586)
 sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
 sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
 
-sensor_fartop.DrawCalibration("Far_Top")
-sensor_farbot.DrawCalibration("Far_Bot")
+sensor_fartop.DrawCalibration()
+sensor_farbot.DrawCalibration()
 
 farside_old = castor_half("farside_old",[sensor_fartop,sensor_farbot])
-farside_old.setVerbosity(verbosity)
+farside_old.SetVerbosity(verbosity)
+
+
+if verbosity > 0:
+    print "\nPositions of -near side- sensors are: "
+
+sensor_neartop = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 67.5), 67.5, "near top") #offcenter applied to y position unrotated. this is correct (clockwise)
+sensor_nearbot = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -22.5), -22.5, "near bot")
+
+sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
+sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
+
+sensor_neartop.DrawCalibration()
+sensor_nearbot.DrawCalibration()
+
+sensor_neartop.SetDist(15.2248-2,0.00119269)
+sensor_nearbot.SetDist(25.8462-2,0.0232433)
+
+nearside_old = castor_half("nearside_old",[sensor_neartop,sensor_nearbot])
+nearside_old.SetVerbosity(verbosity)
+
+castor_old = castor(nearside_old,farside_old)
 print "Before B field"
-farside_old.fit_pos()
+castor_old.fit_pos()
+
+####FITTING NEW CASTOR#######
 
 sensor_fartop = sensor.fromsensor(sensor_fartop)
 sensor_farbot = sensor.fromsensor(sensor_farbot)
@@ -191,30 +266,7 @@ sensor_fartop.SetDist(12.6556-1,0)
 sensor_farbot.SetDist(22.2788-1,0.00172011)
 
 farside_new = castor_half("farside_new",[sensor_fartop,sensor_farbot])
-farside_new.setVerbosity(verbosity)
-print "After B field"
-farside_new.fit_pos()
-
-####FITTING NEAR SIDE####
-if verbosity > 0:
-    print "\nPositions of -near side- sensors are: "
-
-sensor_neartop = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 67.5), 67.5) #offcenter applied to y position unrotated. this is correct (clockwise)
-sensor_nearbot = sensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -22.5), -22.5)
-
-sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
-sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
-
-sensor_neartop.DrawCalibration("Near_Top")
-sensor_nearbot.DrawCalibration("Near_Bot")
-
-sensor_neartop.SetDist(15.2248-2,0.00119269)
-sensor_nearbot.SetDist(25.8462-2,0.0232433)
-
-nearside_old = castor_half("nearside_old",[sensor_neartop,sensor_nearbot])
-nearside_old.setVerbosity(verbosity)
-print "Before B field"
-nearside_old.fit_pos()
+farside_new.SetVerbosity(verbosity)
 
 sensor_neartop = sensor.fromsensor(sensor_neartop)
 sensor_nearbot = sensor.fromsensor(sensor_nearbot)
@@ -223,10 +275,10 @@ sensor_neartop.SetDist(32.9261-2,2.44163e-15)
 sensor_nearbot.SetDist(32.6869-2,0.00781898)
 
 nearside_new = castor_half("nearside_new",[sensor_neartop,sensor_nearbot])
-nearside_new.setVerbosity(verbosity)
+nearside_new.SetVerbosity(verbosity)
 
 print "After B field"
-nearside_new.fit_pos()
+castor_new.fit_pos()
 
 def printShift(old,new):
     dx = new.x-old.x
@@ -235,8 +287,7 @@ def printShift(old,new):
     print "Shift due to magnetic field ({half}): dx={dx:.2f} dy={dy:.2f} dr={dr:.2f}".format(half="far  half" if old.isFarHalf else "near half",dx=dx,dy=dy,dr=dr)
 
 print("\n\n")
-printShift(farside_old,farside_new)
-printShift(nearside_old,nearside_new)
+printShift(castor_old,castor_new)
 
 
 
