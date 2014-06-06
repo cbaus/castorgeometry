@@ -28,7 +28,7 @@ def rotatePoint(centerPoint,point,angle):
     temp_point = temp_point[0]+centerPoint[0] , temp_point[1]+centerPoint[1]
     return temp_point
 
-class castor_half():
+class castor_half(object):
     """Class that takes for a castor half that takes sensor information and can shift/fit position so that sensors point to beam pipe"""
     def __init__(self, name,sensors):
         self.nsensors = len(sensors)
@@ -54,29 +54,40 @@ class castor_half():
         ndf = len(self.sensors);
         return chi2,ndf
 
-class castor():
+class castor(object):
     """Class object to store both halves and sensors (e.g. potentiometers) that are connected to both halves"""
-    def __init__(self, name,sensors=[]):
-        self.nsensors = len(sensors)
-        self.sensors = sensors #x direction is 0. counter-clockwise
+    def __init__(self, name, halves):
+        self.nsensors = 0
+        self.sensors = []
         self.verbosity = 1
         self.half = {}
+        for iHalf in halves:
+            self.half["far" if iHalf.isFarHalf else "near"] = iHalf
+        
+        self.checkConsistency()
+
+    def SetVerbosity(self,verb):
+        self.verbosity = verb
+        for key,iHalf in self.half.iteritems():
+            iHalf.SetVerbosity(self.verbosity)
 
     def checkConsistency(self):
-        for iSen in self.sensors: assert type(iSen) == type(openingSensor), "only opening sensors should be added to castor instance"
+        for iSen in self.sensors:
+            assert type(iSen) == openingSensor, "only opening sensors should be added to castor instance"
         assert len(self.half)==2,"Two halfes needed in castor instance"
 
-    def addHalf(self, half):
-        """add half"""
-        half.SetVerbosity(self.verbosity)
-        self.half["far" if half.isFarHalf else "near"] = half
+    def addSensors(self, sensors):
+        """add list of sensors"""
+        self.nsensors = len(sensors)
+        self.sensors = sensors
+        self.checkConsistency()
 
     def fit(self):
         self.checkConsistency()
-        
+
         near_half = self.half["near"]
-        far_half = self.half["far"]        
-        
+        far_half = self.half["far"]
+
         def f(x_far,y_far,x_near,y_near):
             chi2 = 0.
             ndf = 0
@@ -89,12 +100,12 @@ class castor():
             ndf += n
 
             for iSen in self.sensors:
-                c,n = iSen.GetChi2()
+                c = iSen.GetChi2(x_near,y_near,x_far)
                 chi2 += c
-                ndf += n
+                ndf += 1
 #            assert ndf > 4, "at least one sensor needed for fit? huh?"
             return chi2
-            
+
         m = minuit(f)
         if verbosity > 1 : m.printMode = 1
         m.migrad()
@@ -119,11 +130,11 @@ class castor():
             print "Fitted position (chi2/ndf={chi2:.2f})".format(chi2=chi2)
             print "Near half: (x,y)=({0:.2f}{1:+.2f}{2:+.2f},{3:.2f}{4:+.2f}{5:+.2f})".format(self.half["near"].x,self.half["near"].xeu,self.half["near"].xel,self.half["near"].y,self.half["near"].yeu,self.half["near"].yel)
             print "Far half: (x,y)=({0:.2f}{1:+.2f}{2:+.2f},{3:.2f}{4:+.2f}{5:+.2f})".format(self.half["far"].x,self.half["far"].xeu,self.half["far"].xel,self.half["far"].y,self.half["far"].yeu,self.half["far"].yel)
-            print "Opening: {op:.2f} mm".format(op = far_half.x - near_half.x)
+            print "Opening: {op:.2f} mm".format(op = near_half.x - far_half.x)
         return
 
-class sensor():
-    """ABSTRACT sensor class. stores information about position and angle about each sensor"""        
+class sensor(object):
+    """ABSTRACT sensor class. stores information about position and angle about each sensor"""
     def __init__(self, pos, angle,name):
         """angle counter clock-wise in deg [-180,180] starting from 3pm looking from IP"""
         self.pos = pos
@@ -132,6 +143,7 @@ class sensor():
         self.meas_r_err = 0
         self.cal_meas = []
         self.cal_true = []
+        self.cal_spline = None
         self.verbosity = 1
         self.name = name
 
@@ -140,6 +152,7 @@ class sensor():
 
         if self.verbosity > 2:
             print "             nominal position (x,y)=({0[0]:.2f},{0[1]:.2f})".format(self.pos)
+
     @classmethod
     def fromsensor(cls, sensor):
         """copy constructor"""
@@ -151,6 +164,8 @@ class sensor():
 
     def SetCalibrationData(self,meas,true):
         """set measured calibration data. like [-1.2, 10.1, 20.4] and [0, 10, 20]"""
+        if not meas or not true: return
+
         self.cal_meas = meas
         self.cal_true = true
         assert len(self.cal_meas) == len(self.cal_true), 'error in calibration data'
@@ -169,7 +184,7 @@ class sensor():
         plt.ylabel('truth [mm]')
         plt.title('Sensors (IP side) {name}'.format(name=self.name.replace("_"," ")))
         plt.savefig("ir_sens_calib_{name}.png".format(name=self.name.replace(" ","_")))
-        
+
     def GetCalibratedDist(self):
         """apply calibration and return distance. if outside of calibration data it will be extrapolated"""
         if (self.cal_spline):
@@ -178,7 +193,7 @@ class sensor():
             if self.verbosity > 1:
                 print "No calibration data set. Using uncalibrated"
             return self.meas_r
-    
+
     def GetDist(self):
         return self.meas_r
 
@@ -238,86 +253,100 @@ class infraredBeamPipeSensor(sensor):
 
 class openingSensor(sensor):
     """subclass of sensor that measures the distance to mount or opening. """
-    def __init__(self,pos_y,far_half,name):
-        """pos = at (0,y)
-        nearHalf = needs information of far half. implemented as if sensor would be mounted on near half and measures distance to far half"""
-        self.far_half = far_half
+    def __init__(self,pos_y,name):
+        """pos = at (0,y)"""
         sensor.__init__(self,(0,pos_y),angle=0,name=name)
 
-    def _AwayFromTarget(self,pointing_at):
-        xe=self.GetDistError()  #error is 2 mm?
-        return abs(pointing_at[0]-far_half.pos[0]),xe
-        
+    @classmethod
+    def fromsensor(cls, sensor):
+        """copy constructor"""
+        new = cls(sensor.pos[0],sensor.name)
+        new.verbosity = sensor.verbosity
+        new.SetCalibrationData(sensor.cal_meas,sensor.cal_true)
+        new.SetDist(sensor.meas_r,sensor.meas_r_err)
+        return new
+
+    def GetChi2(self,x_near,y_near,x_far):
+        """overwriting GetChi2 form base clase to accept x from other half"""
+        delta,sigma = self._AwayFromTarget(self._GetPointingAt(x_near,y_near),x_far)
+        return delta ** 2 / sigma ** 2
+
+    def _AwayFromTarget(self,pointing_at,x_other_half):
+        delta = abs(pointing_at[0]-x_other_half)
+        sigma=self.GetDistError()  #error is 2 mm?
+        return delta,sigma
+
+
 ####FITTING####
 verbosity = 1
 offcenter = -6.35 #mm distance because the sending device is not in the middle of the housing
 
 ####FITTING OLD CASTOR####
-#parameters are [angle, off-center unrotated laser y-direction in mm, zeroshift means distance when touching the metal in mm]
-if verbosity > 0:
-    print "\nPositions of -far side- sensors are: "
-
+####Defining sensors####
 sensor_fartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 180-67.5), 180-67.5, "far top") #offcenter applied to y position unrotated. this is correct (clockwise)
 sensor_farbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -180+22.5), -180+22.5, "far bot")
-                     
 sensor_fartop.SetDist(8.68439-1,0)
 sensor_farbot.SetDist(20.2883-1,0.00508586)
-
 sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
 sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
-
 sensor_fartop.DrawCalibration()
 sensor_farbot.DrawCalibration()
 
-farside_old = castor_half("farside_old",[sensor_fartop,sensor_farbot])
-
-if verbosity > 0:
-    print "\nPositions of -near side- sensors are: "
-
 sensor_neartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 67.5), 67.5, "near top") #offcenter applied to y position unrotated. this is correct (clockwise)
 sensor_nearbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -22.5), -22.5, "near bot")
-
 sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
 sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
-
 sensor_neartop.DrawCalibration()
 sensor_nearbot.DrawCalibration()
-
 sensor_neartop.SetDist(15.2248-2,0.00119269)
 sensor_nearbot.SetDist(25.8462-2,0.0232433)
 
-nearside_old = castor_half("nearside_old",[sensor_neartop,sensor_nearbot])
-nearside_old.SetVerbosity(verbosity)
+sensor_pot_top = openingSensor(300,"potentiometer top")
+sensor_pot_top.SetDist(8.3,2.)
+sensor_pot_bottom = openingSensor(-300,"potentiometer bottom")
+sensor_pot_bottom.SetDist(14.1,2.)
 
+####Defining Halves#####
+nearside_old = castor_half("nearside_old",[sensor_neartop,sensor_nearbot])
+farside_old = castor_half("farside_old",[sensor_fartop,sensor_farbot])
+
+####Defining Whole Castor Instance####
+castor_old = castor("castor at old position",[nearside_old,farside_old])
+castor_old.addSensors([sensor_pot_bottom,sensor_pot_top])
+castor_old.SetVerbosity(verbosity)
+
+####Fitting####
 print "Before B field"
-castor_old = castor("castor at old position")
-castor_old.addHalf(nearside_old)
-castor_old.addHalf(farside_old)
 castor_old.fit()
 
 ####FITTING NEW CASTOR#######
-
+####Defining Sensors####
 sensor_fartop = infraredBeamPipeSensor.fromsensor(sensor_fartop)
 sensor_farbot = infraredBeamPipeSensor.fromsensor(sensor_farbot)
 sensor_fartop.SetDist(12.6556-1,0)
 sensor_farbot.SetDist(22.2788-1,0.00172011)
 
-farside_new = castor_half("farside_new",[sensor_fartop,sensor_farbot])
-farside_new.SetVerbosity(verbosity)
-
 sensor_neartop = infraredBeamPipeSensor.fromsensor(sensor_neartop)
 sensor_nearbot = infraredBeamPipeSensor.fromsensor(sensor_nearbot)
-
 sensor_neartop.SetDist(32.9261-2,2.44163e-15)
 sensor_nearbot.SetDist(32.6869-2,0.00781898)
 
-nearside_new = castor_half("nearside_new",[sensor_neartop,sensor_nearbot])
-nearside_new.SetVerbosity(verbosity)
+sensor_pot_top = openingSensor.fromsensor(sensor_pot_top)
+sensor_pot_top.SetDist(12.6,2.)
+sensor_pot_bottom = openingSensor.fromsensor(sensor_pot_bottom)
+sensor_pot_bottom.SetDist(17.9,2.)
 
+####Definging Halves####
+nearside_new = castor_half("nearside_new",[sensor_neartop,sensor_nearbot])
+farside_new = castor_half("farside_new",[sensor_fartop,sensor_farbot])
+
+####Defining Whole Castor Instance####
+castor_new = castor("castor at new position",[nearside_new,farside_new])
+castor_new.addSensors([sensor_pot_bottom,sensor_pot_top])
+castor_new.SetVerbosity(verbosity)
+
+####Fitting####
 print "After B field"
-castor_new = castor("castor at new position")
-castor_new.addHalf(nearside_new)
-castor_new.addHalf(farside_new)
 castor_new.fit()
 
 def printShift(old,new):
@@ -388,7 +417,7 @@ def draw(fig,old,new):
         anglenew = new.sensors[i].angle
         rnew = new.sensors[i].GetCalibratedDist()
         shiftnew = array([new.x,new.y])
-        
+
         pointing_at_new = posnew - array([rnew * math.cos(radians(angle)), rnew * math.sin(radians(angle))])
         #draw fitted new position
         drawSensor("fitted w/ B-field" if i==0 else "","g",posnew+shiftnew,pointing_at_new+shiftnew);
