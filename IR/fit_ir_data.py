@@ -16,8 +16,9 @@ from scipy import arange, array, exp
 
 castor_inner_octant_radius = 40.6507 #cos(22.5) * 44
 beampipe_r = (57+0.5)/2 #in mm #+white paper = 0.5mm
-beampipe_x = 0#-0.7 #hauke's value
-beampipe_y = 0#-1.4
+beampipe_x_shift = 0#-0.7 #hauke's value
+beampipe_y_shift = 0#-1.4
+activeSensingAreaShift = -6.35 #mm distance because the sending device is not in the middle of the housing
 
 def rotatePoint(centerPoint,point,angle):
     """Rotates a point around another centerPoint. Angle is in degrees.
@@ -27,6 +28,9 @@ def rotatePoint(centerPoint,point,angle):
     temp_point = ( temp_point[0]*math.cos(angle)-temp_point[1]*math.sin(angle) , temp_point[0]*math.sin(angle)+temp_point[1]*math.cos(angle))
     temp_point = temp_point[0]+centerPoint[0] , temp_point[1]+centerPoint[1]
     return temp_point
+
+def distanceTwoPoints(x1,y1,x2,y2):
+    return sqrt( (x1-x2)**2 + (y1-y2)**2 )
 
 class castor_half(object):
     """Class that takes for a castor half that takes sensor information and can shift/fit position so that sensors point to beam pipe"""
@@ -82,6 +86,27 @@ class castor(object):
         self.sensors = sensors
         self.checkConsistency()
 
+    def GetChi2(self,x_far,y_far,x_near,y_near):
+        near_half = self.half["near"]
+        far_half = self.half["far"]
+        chi2 = 0.
+        ndf = 0
+
+        c,n = near_half.GetChi2(x_near,y_near)
+        chi2 += c
+        ndf += n
+        c,n = far_half.GetChi2(x_far,y_far)
+        chi2 += c
+        ndf += n
+
+        for iSen in self.sensors:
+            c = iSen.GetChi2(x_near,y_near,x_far)
+            chi2 += c
+            ndf += 1
+#            assert ndf > 4, "at least one sensor needed for fit? huh?"
+        #if y_near >0 : chi2 += 30*abs(y_near) #remove later. constrain to negative y
+        return chi2
+
     def fit(self):
         self.checkConsistency()
 
@@ -104,9 +129,17 @@ class castor(object):
                 chi2 += c
                 ndf += 1
 #            assert ndf > 4, "at least one sensor needed for fit? huh?"
+#            if y_far <0 : chi2 += 0.2*y_far #remove later. constrain to negative y
             return chi2
 
         m = minuit(f)
+#        m.values["x_far"] = -5
+#        m.values["y_far"] = -10
+#        m.values["x_near"] = 17
+#        m.values["y_near"] = -17
+#        m.tol = 10000
+
+        print m.values
         if verbosity > 1 : m.printMode = 1
         m.migrad()
         m.minos()
@@ -188,7 +221,7 @@ class sensor(object):
     def GetCalibratedDist(self):
         """apply calibration and return distance. if outside of calibration data it will be extrapolated"""
         if (self.cal_spline):
-            return self.cal_spline(self.meas_r) #for other version array is returned. [0] is needed
+            return self.cal_spline(self.meas_r)[0] #for other scipy version array is returned. [0] is needed
         else:
             if self.verbosity > 1:
                 print "No calibration data set. Using uncalibrated"
@@ -224,19 +257,60 @@ class infraredBeamPipeSensor(sensor):
 
     def distance_to_beampipe(self, x , y , xe=0 , ye=0 ):
         """calculate distance for any given point to beam pipe outer circle"""
-        global beampipe_x
-        global beampipe_y
+        global beampipe_x_shift
+        global beampipe_y_shift
         global beampipe_r
-        r = math.sqrt((x-beampipe_x)**2 + (y-beampipe_y)**2)
+        r = math.sqrt((x-beampipe_x_shift)**2 + (y-beampipe_y_shift)**2)
         distance = math.fabs(beampipe_r - r);
-        ddisdx = 1 / 2 / r * 2 * (x-beampipe_x)
-        ddisdy = 1 / 2 / r * 2 * (y-beampipe_y)
+        ddisdx = 1 / 2 / r * 2 * (x-beampipe_x_shift) #derivative d(distance)/d(x)
+        ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
         error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
+        return distance , error
+
+    def distance_to_beampipe_proj(self, x , y , xe=0 , ye=0 ):
+        """calculate distance for any given point to beam pipe outer circle"""
+        global beampipe_x_shift
+        global beampipe_y_shift
+        global beampipe_r
+        
+        projP = rotatePoint([0,0],[x,y], -self.angle) #now incident angle of line of sight is parallel to x-axis coming from near side
+        #print "projP=",projP
+        
+        activeSensing = activeSensingAreaShift / 2.
+
+        # if abs(projP[1])+abs(activeSensing) < beampipe_r:
+        #     areaOutsideOfCircle = 0
+        # else:
+        #     areaOutsideOfCircle = (abs(projP[1])+abs(activeSensing)-beampipe_r)/(abs(activeSensing)*2) # how much of the sensing area covers space outside the beampipe circle
+        # print "area outside:",areaOutsideOfCircle , math.tanh(areaOutsideOfCircle * math.pi) * beampipe_r
+        # if areaOutsideOfCircle > 1: return -1,xe
+        
+        sensingY = [projP[1]]#np.linspace(abs(projP[1])-abs(activeSensing), min(abs(projP[1])+abs(activeSensing),beampipe_r),num=10)
+        sensingDist = []
+        for y in sensingY:
+            beampipe_intersect_y = y
+            if abs(y) < beampipe_r:
+                beampipe_intersect_x = sqrt(beampipe_r**2-beampipe_intersect_y**2) #r^2=x^2+y^2 -> solve for x
+                sensingDist.append(abs(beampipe_intersect_x - projP[0]))  #line of sight distance
+            elif y > beampipe_r:
+                sensingDist.append(distanceTwoPoints(projP[0],projP[1], 0,beampipe_r))
+            else: #y < beampipe_r
+                sensingDist.append(distanceTwoPoints(projP[0],projP[1], 0,-beampipe_r))
+            
+            
+        distance = sum(sensingDist) / len(sensingDist)
+        #if abs(projP[1]) > beampipe_r:
+        #    distance += (abs(projP[1])-beampipe_r)*(abs(projP[1])-beampipe_r)**2#( math.tanh( (abs(projP[1])/beampipe_r-1) * 5 * math.pi ) +1 ) * beampipe_r #add the beampipe radius for overhanging area = contrain fit
+        #print "Distance:", sensingY, sensingDist, distance
+        error = sqrt(xe**2+ye**2);
+        #ddisdx = 1 / 2 / r * 2 * (x-beampipe_x_shift) #derivative d(distance)/d(x)
+        #ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
+        #error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
         return distance , error
 
     def _AwayFromTarget(self,pointing_at):
         r = self.GetCalibratedDist()
-        error_r = sqrt(2**2 + self.GetDistError()**2) #1mm sys + stat error
+        error_r = sqrt(2**2 + self.GetDistError()**2) #2 mm sys + stat error
         error_theta = radians(1.5) #deg systematic uncertainty
 
         dpxdr     = -math.cos(radians(self.angle))
@@ -248,7 +322,7 @@ class infraredBeamPipeSensor(sensor):
         ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
 
         if self.verbosity>1: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
-        delta,sigma = self.distance_to_beampipe(pointing_at[0],pointing_at[1], xe, ye)
+        delta,sigma = self.distance_to_beampipe_proj(pointing_at[0],pointing_at[1], xe, ye)
         return delta,sigma
 
 class openingSensor(sensor):
@@ -267,43 +341,43 @@ class openingSensor(sensor):
         return new
 
     def GetChi2(self,x_near,y_near,x_far):
-        """overwriting GetChi2 form base clase to accept x from other half"""
+        """overwriting GetChi2 from base class to accept x from other half"""
         delta,sigma = self._AwayFromTarget(self._GetPointingAt(x_near,y_near),x_far)
         return delta ** 2 / sigma ** 2
 
     def _AwayFromTarget(self,pointing_at,x_other_half):
         delta = abs(pointing_at[0]-x_other_half)
-        sigma=self.GetDistError()  #error is 2 mm?
+        sigma=self.GetDistError()
         return delta,sigma
 
 
 ####FITTING####
 verbosity = 1
-offcenter = -6.35 #mm distance because the sending device is not in the middle of the housing
 
 ####FITTING OLD CASTOR####
 ####Defining sensors####
-sensor_fartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 180-67.5), 180-67.5, "far top") #offcenter applied to y position unrotated. this is correct (clockwise)
-sensor_farbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -180+22.5), -180+22.5, "far bot")
-sensor_fartop.SetDist(8.68439-1,0)
-sensor_farbot.SetDist(20.2883-1,0.00508586)
+sensor_fartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], 180-67.5), 180-67.5, "far top") #activeSensingAreaShift applied to y position unrotated. this is correct (clockwise)
+sensor_farbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], -180+22.5), -180+22.5, "far bot")
+sensor_fartop.SetDist(8.68439,0)
+sensor_farbot.SetDist(20.2883,0.18)
 sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
 sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
 sensor_fartop.DrawCalibration()
 sensor_farbot.DrawCalibration()
 
-sensor_neartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], 67.5), 67.5, "near top") #offcenter applied to y position unrotated. this is correct (clockwise)
-sensor_nearbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,offcenter], -22.5), -22.5, "near bot")
+sensor_neartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], 67.5), 67.5, "near top") #activeSensingAreaShift applied to y position unrotated. this is correct (clockwise)
+sensor_nearbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], -22.5), -22.5, "near bot")
 sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
 sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
 sensor_neartop.DrawCalibration()
 sensor_nearbot.DrawCalibration()
-sensor_neartop.SetDist(15.2248-2,0.00119269)
-sensor_nearbot.SetDist(25.8462-2,0.0232433)
+sensor_neartop.SetDist(15.2248,0.04)
+sensor_nearbot.SetDist(25.8462,0.82)
 
-sensor_pot_top = openingSensor(300,"potentiometer top")
-sensor_pot_top.SetDist(8.3,2.)
-sensor_pot_bottom = openingSensor(-300,"potentiometer bottom")
+#potis are fixed to far side. castor flange 200mm minus ~10mm
+sensor_pot_top = openingSensor(190,"potentiometer top")
+sensor_pot_top.SetDist(8.3,2.) #2 mm uncertainty
+sensor_pot_bottom = openingSensor(-190,"potentiometer bottom")
 sensor_pot_bottom.SetDist(14.1,2.)
 
 ####Defining Halves#####
@@ -323,20 +397,20 @@ castor_old.fit()
 ####Defining Sensors####
 sensor_fartop = infraredBeamPipeSensor.fromsensor(sensor_fartop)
 sensor_farbot = infraredBeamPipeSensor.fromsensor(sensor_farbot)
-sensor_fartop.SetDist(12.6556-1,0)
-sensor_farbot.SetDist(22.2788-1,0.00172011)
+sensor_fartop.SetDist(12.6556,0)
+sensor_farbot.SetDist(22.2788,0.04)
 
 sensor_neartop = infraredBeamPipeSensor.fromsensor(sensor_neartop)
 sensor_nearbot = infraredBeamPipeSensor.fromsensor(sensor_nearbot)
-sensor_neartop.SetDist(32.9261-2,2.44163e-15)
-sensor_nearbot.SetDist(32.6869-2,0.00781898)
+sensor_neartop.SetDist(32.9261,4e-6)
+sensor_nearbot.SetDist(32.6869,0.18)
 
 sensor_pot_top = openingSensor.fromsensor(sensor_pot_top)
-sensor_pot_top.SetDist(12.6,2.)
+sensor_pot_top.SetDist(19.1,2.) #2 mm uncertainty
 sensor_pot_bottom = openingSensor.fromsensor(sensor_pot_bottom)
-sensor_pot_bottom.SetDist(17.9,2.)
+sensor_pot_bottom.SetDist(22.1,2.)
 
-####Definging Halves####
+####Defining Halves####
 nearside_new = castor_half("nearside_new",[sensor_neartop,sensor_nearbot])
 farside_new = castor_half("farside_new",[sensor_fartop,sensor_farbot])
 
@@ -344,6 +418,27 @@ farside_new = castor_half("farside_new",[sensor_fartop,sensor_farbot])
 castor_new = castor("castor at new position",[nearside_new,farside_new])
 castor_new.addSensors([sensor_pot_bottom,sensor_pot_top])
 castor_new.SetVerbosity(verbosity)
+
+fig = plt.figure(figsize=[8,8])
+ax = fig.gca()
+#plt.plot(ploty,distance)
+#plt.plot(ploty,distanceold)
+#plt.plot(ploty,distanceextra)
+#plt.ylim(0,100)
+xg ,yg = np.mgrid [-25:45:100j , -40:40:100j]
+f=[]
+for i in range(len(xg)):
+    print i
+    g=[]
+    for j in range(len(xg[i])):
+        g.append(castor_new.GetChi2(-6.5,-6.5,xg[i][j],yg[i][j]))
+    f.append( g)
+#print xg, "\n yg ", yg, "\n f" , f
+from matplotlib.colors import LogNorm
+p = plt.pcolor(xg,yg,f,norm=LogNorm())
+cb = fig.colorbar(p, ax=ax)
+plt.savefig("deleteme.png")
+#exit(0)
 
 ####Fitting####
 print "After B field"
@@ -365,7 +460,7 @@ printShift(castor_old.half['far'],castor_new.half['far'])
 fig = plt.figure(figsize=[8,8])
 ax = fig.gca()
 
-circle1=plt.Circle((beampipe_x,beampipe_y),beampipe_r,color='black',fill=False,label="beampipe",lw=2)
+circle1=plt.Circle((beampipe_x_shift,beampipe_y_shift),beampipe_r,color='black',fill=False,label="beampipe",lw=2)
 ax.add_artist(circle1)
 
 leglables=["beampipe"]
@@ -377,7 +472,7 @@ def draw(fig,old,new):
 
     def drawSensor(label,color,pos,pointing_at):
        sightline = lin.Line2D( [pos[0],pointing_at[0]] , [pos[1],pointing_at[1]], color=color, label=label)
-       ax.add_artist(sightline)
+       if color != "0.5": ax.add_artist(sightline)
        sensor=plt.Circle((pos[0],pos[1]),3,color=color,fill=True, alpha=0.5)
        ax.add_artist(sensor)
        if(label): legpointers.append(sensor)
