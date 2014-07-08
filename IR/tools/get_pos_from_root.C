@@ -40,7 +40,7 @@ void get_pos_from_root()
 
   vector<double> sensors_delta;
 
-  TFile* file = TFile::Open("InputSensorNamesHFminus_v1-data_2013_time_fix_with_oracle_db_2_with_lumi_m.root");
+  TFile* file = TFile::Open("data/InputSensorNamesHFminus_v1-data_2013_time_fix_with_oracle_db_2_with_lumi_m.root");
   TTree* access;
   file->GetObject("SensorsTree",access);
 
