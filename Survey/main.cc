@@ -6,12 +6,14 @@
 #include <TCanvas.h>
 #include <TMath.h>
 #include <TPaveText.h>
+#include <TStyle.h>
 
 #include <iostream>
 using namespace std;
 
 int main()
 {
+  gStyle->SetOptStat(0);
 
   CastorHalf farHalf(true);
   Point farMeasuredTop(-0.0859*1000.,0.3115*1000.,-15.8858*1000.);
@@ -20,9 +22,9 @@ int main()
   Point farMeasuredTopFeb(-0.0869*1000.,0.3108*1000.,-15.8865*1000.);
   Point farMeasuredMidFeb(-0.3211*1000.,0.0837*1000.,-14.8791*1000.);
   Point farMeasuredBottomFeb(-0.3148*1000.,-0.0972*1000.,-15.8895*1000.);
-  farHalf.SetRelTarget1(farMeasuredTopFeb);
-  farHalf.SetRelTarget2(farMeasuredMidFeb);
-  farHalf.SetRelTarget3(farMeasuredBottomFeb);
+  farHalf.SetRelTarget1(farMeasuredTop);
+  farHalf.SetRelTarget2(farMeasuredMid);
+  farHalf.SetRelTarget3(farMeasuredBottom);
 
 
   CastorHalf nearHalf(false);
@@ -32,9 +34,9 @@ int main()
   Point nearMeasuredTopFeb(0.0932*1000., 0.3107*1000., -15.8898*1000.);
   Point nearMeasuredMidFeb(0.3253*1000., 0.0850*1000., -14.8811*1000.);
   Point nearMeasuredBottomFeb(0.3233*1000., -0.0986*1000., -15.8913*1000.);
-  nearHalf.SetRelTarget1(nearMeasuredTopFeb);
-  nearHalf.SetRelTarget2(nearMeasuredMidFeb);
-  nearHalf.SetRelTarget3(nearMeasuredBottomFeb);
+  nearHalf.SetRelTarget1(nearMeasuredTop);
+  nearHalf.SetRelTarget2(nearMeasuredMid);
+  nearHalf.SetRelTarget3(nearMeasuredBottom);
 
   cout << endl << endl << " ---Far:---" << endl << endl;
   farHalf.Fit(0);
@@ -90,7 +92,7 @@ int main()
   txt_far->Draw("SAME");
   txt_near->Draw("SAME");
   can2.SaveAs("plot.pdf");
-  can2.SaveAs("plot.root");
+  can2.SaveAs("plot.png");
 
 
   TCanvas can3;

@@ -23,7 +23,7 @@ using namespace std;
 #define _do_animation 0
 #define _do_fits 1
 
-void animate_pos_mag()
+void get_pos_from_root()
 {
   vector<string> sensors;
   sensors.push_back("IP_FAR_TOP");
@@ -31,11 +31,12 @@ void animate_pos_mag()
   sensors.push_back("IP_NEAR_TOP");
   sensors.push_back("IP_NEAR_BOTTOM");
 
-  vector<double> sensors_angle;
-  sensors_angle.push_back((0-22.5)*TMath::DegToRad());
-  sensors_angle.push_back((90-22.5)*TMath::DegToRad());
-  sensors_angle.push_back((180+22.5)*TMath::DegToRad());
-  sensors_angle.push_back((90+22.5)*TMath::DegToRad());
+  sensors.push_back("NONIP_FAR_TOP");
+  sensors.push_back("NONIP_FAR_CENTER");
+  sensors.push_back("NONIP_FAR_BOTTOM");
+  sensors.push_back("NONIP_NEAR_TOP");
+  sensors.push_back("NONIP_NEAR_CENTER");
+  sensors.push_back("NONIP_NEAR_BOTTOM");
 
   vector<double> sensors_delta;
 
@@ -62,33 +63,36 @@ void animate_pos_mag()
       if(_do_fits)
         {
           cout << "-- Fitting..." << endl;
-          string comp1_start("20130108000000000");
-          string comp1_end  ("20130109000000000");
-          string comp2_start("20130117000000000");
-          string comp2_end  ("20130118000000000");
+          string comp_before_start("20130108000000000");
+          string comp_before_end  ("20130109000000000");
+          string comp_after_start("20130117000000000");
+          string comp_after_end  ("20130118000000000");
           
-          ostringstream comp1_selec, comp2_selec;
-          comp1_selec << varname.str() << " < 100 && Timestamp >= " << comp1_start << " && Timestamp < " << comp1_end;
-          comp2_selec << varname.str() << " < 100 && Timestamp >= " << comp2_start << " && Timestamp < " << comp2_end;
+          ostringstream comp_before_selec, comp_after_selec;
+          comp_before_selec << varname.str() << " < 100 && Timestamp >= " << comp_before_start << " && Timestamp < " << comp_before_end;
+          comp_after_selec << varname.str() << " < 100 && Timestamp >= " << comp_after_start << " && Timestamp < " << comp_after_end;
 
           TCanvas* c1 = new TCanvas;
-          access->Draw((varname.str()+string(":Timestamp")).c_str(),comp1_selec.str().c_str());
-          TGraph* comp1_hist = (TGraph*)(gROOT->FindObject("Graph")->Clone());
+          access->Draw((varname.str()+string(":Timestamp")).c_str(),comp_before_selec.str().c_str());
+          TGraph* comp_before_hist = (TGraph*)(gROOT->FindObject("Graph")->Clone());
           
           TCanvas* c2 = new TCanvas;
-          access->Draw((varname.str()+string(":Timestamp")).c_str(),comp2_selec.str().c_str());
-          TGraph* comp2_hist = (TGraph*)gPad->GetPrimitive("Graph")->Clone(); //stupid root deletes graphs
+          access->Draw((varname.str()+string(":Timestamp")).c_str(),comp_after_selec.str().c_str());
+          TGraph* comp_after_hist = (TGraph*)gPad->GetPrimitive("Graph")->Clone(); //stupid root deletes graphs
 
-          if(!comp1_hist || !comp1_hist->GetN()) throw runtime_error("comp1 empty");
-          if(!comp2_hist || !comp2_hist->GetN()) throw runtime_error("comp2 empty");
+          if(!comp_before_hist || !comp_before_hist->GetN()) throw runtime_error("comp_before empty");
+          if(!comp_after_hist || !comp_after_hist->GetN()) throw runtime_error("comp_after empty");
           cout << "-Graphs drawn" << endl;
 
-          TFitResultPtr comp1_fit = comp1_hist->Fit("pol0","S");
-          TFitResultPtr comp2_fit = comp2_hist->Fit("pol0","S");
+          TFitResultPtr comp_before_fit = comp_before_hist->Fit("pol0","SQ");
+          TFitResultPtr comp_after_fit = comp_after_hist->Fit("pol0","SQ");
 
-          cout << "- Fit convergencs status | comp1: " <<  int(comp1_fit) << " | comp2: " << int(comp2_fit) << endl;
+          cout << "\n-------------\n";
+          //          cout << "- Fit convergencs status | before B field: " <<  int(comp_before_fit) << " | after B field: " << int(comp_after_fit) << endl;
+          cout << "- Mean+-RMS before B field | after B field: " <<  comp_before_hist->GetMean(2) << "+-" << comp_before_hist->GetRMS(2) << " | " << comp_after_hist->GetMean(2) << "+-" << comp_after_hist->GetRMS(2) << endl;
+          cout << "-------------\n\n\n";
           
-          sensors_delta.push_back(comp2_fit->Parameter(0)-comp1_fit->Parameter(0));
+          sensors_delta.push_back(comp_after_fit->Parameter(0)-comp_before_fit->Parameter(0));
 
           cout << "--...done fitting" << endl;
 
@@ -158,19 +162,4 @@ void animate_pos_mag()
         }//if do animation
     }//sensor loop
 
-  if(_do_fits)
-    {
-      assert(sensors.size() == sensors_delta.size());
-      assert(sensors.size() == sensors_angle.size());
-      for(int i = 0; i<int(sensors.size()); i++)
-        {
-          double r = sensors_delta[i];
-          double alpha = sensors_angle[i];
-          double x = r * cos(alpha);
-          double y = r * sin(alpha);
-          cout << "Sensor: " << sensors[i] << " Delta: " << sensors_delta[i] << " X: " << x << " Y: " << y << endl;
-        }
-    }
-      
-  
 }//program
