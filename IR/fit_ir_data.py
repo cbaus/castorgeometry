@@ -12,8 +12,9 @@ from matplotlib.path import Path
 from minuit2 import Minuit2 as minuit #minuit2.so needed. Please compile yourself
 from numpy  import *
 from scipy.interpolate import UnivariateSpline
-from scipy import arange, array, exp
+from scipy import arange, array, exp, optimize
 
+create_chi2_plot = True
 castor_inner_octant_radius = 40.6507 #cos(22.5) * 44
 beampipe_r = (57+0.5)/2 #in mm #+white paper = 0.5mm
 beampipe_x_shift = 0#-0.7 #hauke's value
@@ -104,7 +105,7 @@ class castor(object):
             chi2 += c
             ndf += 1
 #            assert ndf > 4, "at least one sensor needed for fit? huh?"
-        #if y_near >0 : chi2 += 30*abs(y_near) #remove later. constrain to negative y
+#        if y_near >0 : chi2 += 30*abs(y_near) #remove later. constrain to negative y
         return chi2
 
     def fit(self):
@@ -129,17 +130,17 @@ class castor(object):
                 chi2 += c
                 ndf += 1
 #            assert ndf > 4, "at least one sensor needed for fit? huh?"
-#            if y_far <0 : chi2 += 0.2*y_far #remove later. constrain to negative y
+#            if y_near >0 : chi2 += 30*abs(y_near) #remove later. constrain to negative y
             return chi2
 
         m = minuit(f)
-#        m.values["x_far"] = -5
-#        m.values["y_far"] = -10
-#        m.values["x_near"] = 17
-#        m.values["y_near"] = -17
-#        m.tol = 10000
+        m.values["x_far"] = -5 #starting values
+        m.values["y_far"] = -10
+        m.values["x_near"] = 15
+        m.values["y_near"] = -10
+#        m.tol = 10000 #how close result must be to estimated minumum
 
-        print m.values
+        if verbosity > 1 : print "Starting values: ", m.values
         if verbosity > 1 : m.printMode = 1
         m.migrad()
         m.minos()
@@ -206,6 +207,7 @@ class sensor(object):
 
     def DrawCalibration(self):
         """Draws plot for calibration data by SetData()"""
+        assert self.cal_spline, "!cannot draw calibration curve since calibration data not set"
         fig = plt.figure(figsize=[8,8])
         ax = fig.gca()
         plt.plot(self.cal_meas, self.cal_true, 'bs')
@@ -254,6 +256,49 @@ class infraredBeamPipeSensor(sensor):
     """subclass of sensor that measures the distance to mount or opening"""
     def __init__(self,pos,angle,name):
         sensor.__init__(self,pos,angle,name)
+        sensor.__seenBeampipe = None
+
+    def __initVisResponse(self):
+        data=np.array([
+            [663,80],
+            [672,151],
+            [678,217],
+            [684,249],
+            [696,294],
+            [716,337],
+            [741,364],
+            [778,372],
+            [805,368],
+            [827,357],
+            [844,335],
+            [858,309],
+            [873,270],
+            [880,235],
+            [886,182],
+            [899,88]])
+        data-=[778,372]
+        data=data/4
+        data2=array(data)
+        data.T[0]*=-1
+        data=array(data.tolist()+data2.tolist()) #poor man's version or mirror data to get symmetric fit
+        x=data.T[0]
+        y=-data.T[1]
+        fitfunc = lambda p, x: p[0]*x**2 + p[1]*x**4 + p[2]*x**6 # Target function (split in 2 functions to draw)
+        errfunc = lambda p, x, y: fitfunc(p, x) - y # Distance to the target function
+        p0 = [1,1,1] #starting values
+        p1, success = optimize.leastsq(errfunc, p0[:], args=(x, y))
+        if success:
+            print "Fitted beampipe visible response successfully"
+        else:
+            print "!Fitted beampipe visible response unsuccessfully"
+            exit(1)
+        self.__seenBeampipe = lambda x: fitfunc(p1,x)
+
+    def __getSeenBeampipe(self,y):
+        if self.__seenBeampipe == None:
+            self.__initVisResponse()
+        return self.__seenBeampipe(y)
+
 
     def distance_to_beampipe(self, x , y , xe=0 , ye=0 ):
         """calculate distance for any given point to beam pipe outer circle"""
@@ -266,6 +311,19 @@ class infraredBeamPipeSensor(sensor):
         ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
         error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
         return distance , error
+
+    def distance_to_beampipe_corr(self, x , y , xe=0 , ye=0 ):
+        """calculate distance for any given point to beam pipe outer circle but with correction from geometric attenuation of the light"""
+        global beampipe_x_shift
+        global beampipe_y_shift
+        global beampipe_r
+        projP = rotatePoint([0,0],[x,y], -self.angle) #now incident angle of line of sight is parallel to x-axis coming from near side
+        x = projP[0]
+        y = projP[1]
+        beampipe_intersect_x = beampipe_r - self.__getSeenBeampipe(y)
+        distance = abs(beampipe_intersect_x - x)
+        error = sqrt(xe**2+ye**2);
+        return distance, error
 
     def distance_to_beampipe_proj(self, x , y , xe=0 , ye=0 ):
         """calculate distance for any given point to beam pipe outer circle"""
@@ -322,7 +380,7 @@ class infraredBeamPipeSensor(sensor):
         ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
 
         if self.verbosity>1: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
-        delta,sigma = self.distance_to_beampipe_proj(pointing_at[0],pointing_at[1], xe, ye)
+        delta,sigma = self.distance_to_beampipe_corr(pointing_at[0],pointing_at[1], xe, ye)
         return delta,sigma
 
 class openingSensor(sensor):
@@ -351,26 +409,26 @@ class openingSensor(sensor):
         return delta,sigma
 
 
-####FITTING####
+########FITTING########
 verbosity = 1
 
-####FITTING OLD CASTOR####
+######FITTING OLD CASTOR####
 ####Defining sensors####
 sensor_fartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], 180-67.5), 180-67.5, "far top") #activeSensingAreaShift applied to y position unrotated. this is correct (clockwise)
 sensor_farbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], -180+22.5), -180+22.5, "far bot")
 sensor_fartop.SetDist(8.68439,0)
 sensor_farbot.SetDist(20.2883,0.18)
-sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
-sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
-sensor_fartop.DrawCalibration()
-sensor_farbot.DrawCalibration()
+#sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
+#sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
+#sensor_fartop.DrawCalibration()
+#sensor_farbot.DrawCalibration()
 
 sensor_neartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], 67.5), 67.5, "near top") #activeSensingAreaShift applied to y position unrotated. this is correct (clockwise)
 sensor_nearbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], -22.5), -22.5, "near bot")
-sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
-sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
-sensor_neartop.DrawCalibration()
-sensor_nearbot.DrawCalibration()
+#sensor_neartop.SetCalibrationData([0.8,10.7,19.9], [0,10,20])
+#sensor_nearbot.SetCalibrationData([0.7,11.1,20.5], [0,10,20])
+#sensor_neartop.DrawCalibration()
+#sensor_nearbot.DrawCalibration()
 sensor_neartop.SetDist(15.2248,0.04)
 sensor_nearbot.SetDist(25.8462,0.82)
 
@@ -393,7 +451,7 @@ castor_old.SetVerbosity(verbosity)
 print "Before B field"
 castor_old.fit()
 
-####FITTING NEW CASTOR#######
+######FITTING NEW CASTOR#######
 ####Defining Sensors####
 sensor_fartop = infraredBeamPipeSensor.fromsensor(sensor_fartop)
 sensor_farbot = infraredBeamPipeSensor.fromsensor(sensor_farbot)
@@ -419,27 +477,6 @@ castor_new = castor("castor at new position",[nearside_new,farside_new])
 castor_new.addSensors([sensor_pot_bottom,sensor_pot_top])
 castor_new.SetVerbosity(verbosity)
 
-fig = plt.figure(figsize=[8,8])
-ax = fig.gca()
-#plt.plot(ploty,distance)
-#plt.plot(ploty,distanceold)
-#plt.plot(ploty,distanceextra)
-#plt.ylim(0,100)
-xg ,yg = np.mgrid [-25:45:100j , -40:40:100j]
-f=[]
-for i in range(len(xg)):
-    print i
-    g=[]
-    for j in range(len(xg[i])):
-        g.append(castor_new.GetChi2(-6.5,-6.5,xg[i][j],yg[i][j]))
-    f.append( g)
-#print xg, "\n yg ", yg, "\n f" , f
-from matplotlib.colors import LogNorm
-p = plt.pcolor(xg,yg,f,norm=LogNorm())
-cb = fig.colorbar(p, ax=ax)
-plt.savefig("deleteme.png")
-#exit(0)
-
 ####Fitting####
 print "After B field"
 castor_new.fit()
@@ -454,9 +491,26 @@ print("\n\n")
 printShift(castor_old.half['near'],castor_new.half['near'])
 printShift(castor_old.half['far'],castor_new.half['far'])
 
+####Creating Chi2 Plot####
+if create_chi2_plot:
+    fig = plt.figure(figsize=[8,8])
+    ax = fig.gca()
+    xg ,yg = np.mgrid [-25:45:50j , -40:40:50j] #range and steps
+    f=[]
+    print "Creating Chi2 plot"
+    for i in range(len(xg)):
+        g=[]
+        for j in range(len(xg[i])):
+            g.append(castor_new.GetChi2(-9.2,-4.45,xg[i][j],yg[i][j]))#-6.5,-6.5,xg[i][j],yg[i][j]))
+        f.append(g)
+    #print xg, "\n yg ", yg, "\n f" , f
+    from matplotlib.colors import LogNorm
+    p = plt.pcolor(xg,yg,f,norm=LogNorm())
+    cb = fig.colorbar(p, ax=ax)
+    plt.savefig("chi2_fixed_far_half.png")
 
 
-#####DRAWING####
+#####DRAWING###### (most of the function should acutally be member functions of the objects itself. please fix)
 fig = plt.figure(figsize=[8,8])
 ax = fig.gca()
 
@@ -470,7 +524,7 @@ def draw(fig,old,new):
     ax = fig.gca()
     assert old.nsensors == new.nsensors
 
-    def drawSensor(label,color,pos,pointing_at):
+    def drawSensor(label,color,pos,pointing_at): #should be moved to member function
        sightline = lin.Line2D( [pos[0],pointing_at[0]] , [pos[1],pointing_at[1]], color=color, label=label)
        if color != "0.5": ax.add_artist(sightline)
        sensor=plt.Circle((pos[0],pos[1]),3,color=color,fill=True, alpha=0.5)
@@ -499,9 +553,9 @@ def draw(fig,old,new):
                  Path.LINETO,
                  Path.LINETO,
                  Path.CLOSEPOLY,
-                 ]
+                 ] #this draws the rectanle
         for j in range(len(verts)):
-            verts[j] = rotatePoint([0,0],verts[j],angle)
+            verts[j] = rotatePoint([0,0],verts[j],angle) #and rotated according to angle of sensor
         path = Path(verts, codes)
         rec = patches.PathPatch(path, facecolor='0.9', lw=2)
         ax.add_patch(rec)
@@ -527,13 +581,13 @@ def draw(fig,old,new):
                                 patchB=None,
                                 connectionstyle="arc3,rad=0.2",
                                 ),
-                )
+                ) #arrow for shift due to magnetic field
 
 
         text = ("Far" if new.isFarHalf else "Near") + " (without B field)\nx={0:.2f}+-{1:.2f}\ny={2:.3f}+-{3:.2f}".format(old.x,(old.xeu-old.xel)/2,old.y,(old.yeu-old.yel)/2)
         an1 = ax.annotate(text, xy=(0.02 if new.isFarHalf else 0.59,0.97), xycoords="axes fraction",
                   va="top", ha="left" if new.isFarHalf else "right",
-                  bbox=dict(boxstyle="round", fc="w"))
+                  bbox=dict(boxstyle="round", fc="w")) #box with values 1
 
         from matplotlib.text import OffsetFrom
         offset_from = OffsetFrom(an1, (0.5, 0))
@@ -542,7 +596,7 @@ def draw(fig,old,new):
                           xytext=(0, -10), textcoords=offset_from,
                           # xytext is offset points from "xy=(0.5, 0), xycoords=at"
                           va="top", ha="center",
-                          bbox=dict(boxstyle="round", fc="w"))
+                          bbox=dict(boxstyle="round", fc="w")) #box with values 2
 
 plt.xlabel('x [mm]')
 plt.ylabel('y [mm]')

@@ -2,7 +2,7 @@
 ##Steps:
 
 #run macro to extract distance measurement from Joao's root tree for each sensor 
-root tools/get_pos_from_root.C
+root tools/get_pos_from_root.C+
 
 #run fitter to fit positions
 python fit_ir_data.py
