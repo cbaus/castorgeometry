@@ -22,11 +22,25 @@ beampipe_x_shift = 0#-0.7 #hauke's value
 beampipe_y_shift = 0#-1.4
 activeSensingAreaShift = -6.35 #mm distance because the sending device is not in the middle of the housing - only for IP side!
 
-""" Calibration data from ROOT """
-Calibration3DFile = TFile.Open("3DCalibration.root")
-CalibrationGraph = Calibration3DFile.Get("Graph2D")
+""" Calibration data from ROOT - one for each sensor"""
+"""
+GeometricCorrectionFile = TFile.Open("GeometricCorrection.root")
+Correction_IP_NEAR_TOP = GeometricCorrectionFile.Get("IP_NEAR_TOP")
+Correction_IP_NEAR_BOTTOM = GeometricCorrectionFile.Get("IP_NEAR_BOTTOM")
+Correction_IP_FAR_TOP = GeometricCorrectionFile.Get("IP_FAR_TOP")
+Correction_IP_FAR_BOTTOM = GeometricCorrectionFile.Get("IP_FAR_BOTTOM")
 
+Correction_NONIP_NEAR_TOP = GeometricCorrectionFile.Get("NONIP_NEAR_TOP")
+Correction_NONIP_NEAR_CENTER = GeometricCorrectionFile.Get("NONIP_NEAR_CENTER")
+Correction_NONIP_NEAR_BOTTOM = GeometricCorrectionFile.Get("NONIP_NEAR_BOTTOM")
+Correction_NONIP_FAR_TOP = GeometricCorrectionFile.Get("NONIP_FAR_TOP")
+Correction_NONIP_FAR_CENTER = GeometricCorrectionFile.Get("NONIP_FAR_CENTER")
+Correction_NONIP_FAR_BOTTOM = GeometricCorrectionFile.Get("NONIP_FAR_BOTTOM")
+"""
+""" ++++++++++++++++++++++++++++++++++++++++++++++ """
 
+""" ++++++++++++++++ """
+""" Helper Functions """
 def rotatePoint(centerPoint,point,angle):
     """Rotates a point around another centerPoint. Angle is in degrees.
     Rotation is counter-clockwise"""
@@ -38,9 +52,10 @@ def rotatePoint(centerPoint,point,angle):
 
 def distanceTwoPoints(x1,y1,x2,y2):
     return sqrt( (x1-x2)**2 + (y1-y2)**2 )
+""" ++++++++++++++++++++++++++++++++++++++++++++++ """
 
 class castor_half(object):
-    """Class that takes for a castor half that takes sensor information and can shift/fit position so that sensors point to beam pipe"""
+    """Class for a castor half that takes sensor information and can shift/fit position so that sensors point to beam pipe"""
     def __init__(self, name,sensors):
         self.nsensors = len(sensors)
         if name.find("far") != -1:
@@ -174,6 +189,12 @@ class castor(object):
             print "Opening: {op:.2f} mm".format(op = near_half.x - far_half.x)
         return
 
+
+""" ++++++++++++++++++++++++++ """
+""" SENSOR classes """
+""" ++++++++++++++++++++++++++ """
+
+
 class sensor(object):
     """ABSTRACT sensor class. stores information about position and angle about each sensor"""
     def __init__(self, pos, angle, name):
@@ -212,11 +233,6 @@ class sensor(object):
         assert len(self.cal_meas) == len(self.cal_true), 'error in calibration data'
         self.cal_spline = UnivariateSpline(self.cal_meas,self.cal_true,k=2)
 
-    def SetGeometryCorrection(self):
-        """ Correction = measDist-realDist """
-        CorrectionFile = TFile.Open("GeometricCorrection.root")
-        self.Correction = CorrectionFile.Get("calibration")
-
     def DrawCalibration(self):
         """Draws plot for calibration data by SetData()"""
         assert self.cal_spline, "!cannot draw calibration curve since calibration data not set"
@@ -241,19 +257,6 @@ class sensor(object):
                 print "No calibration data set. Using uncalibrated"
             return self.meas_r
 
-    def GetCalibratedDist3D(self,x,y):
-        """apply calibration and return distance. using the 3D calibration for large angles"""
-        real_r = CalibrationGraph.Interpolate(self.meas_r,rotatePoint([0,0],array([x,y]), -self.angle)[1])
-        """apply calibration and return distance. using the general geometric correction"""
-        #real_r = self.meas_r-self.Correction.Eval(abs(rotatePoint([0,0],array([x,y]), -self.angle)[1]))
-        #print abs(rotatePoint([0,0],array([x,y]), -self.angle)[1]) , "--> " ,self.meas_r, " | " ,real_r
-        if real_r == 0 :
-            if self.verbosity > 1:
-                print "No calibration data set. Using uncalibrated"
-            return self.meas_r #if 3D calibration fails return uncalibrated distance
-        else:
-            return real_r
-
     def GetDist(self):
         return self.meas_r
 
@@ -265,9 +268,7 @@ class sensor(object):
         self.meas_r_err = r_err
 
     def _GetPointingAt(self,x,y):
-        """calculates r in direction of angle. returns pointing absolute position"""
-        r = self.GetCalibratedDist3D(self.pos[0]+x, self.pos[1]+y)
-        return array(self.pos) - array([r * math.cos(radians(self.angle)), r * math.sin(radians(self.angle))]) + array([x,y])
+        assert False, "please define pure virtual method"
 
     def _AwayFromTarget(self):
         assert False, "please define pure virtual method"
@@ -284,74 +285,24 @@ class infraredBeamPipeSensor(sensor):
         sensor.__seenBeampipe = None
         self.swapped = orientationSwap
 
-    def __initVisResponse(self):
-        data=np.array([
-            [663,80],
-            [672,151],
-            [678,217],
-            [684,249],
-            [696,294],
-            [716,337],
-            [741,364],
-            [778,372],
-            [805,368],
-            [827,357],
-            [844,335],
-            [858,309],
-            [873,270],
-            [880,235],
-            [886,182],
-            [899,88]])
-        data-=[778,372]
-        data=data/4
-        data2=array(data)
-        data.T[0]*=-1
-        data=array(data.tolist()+data2.tolist()) #poor man's version or mirror data to get symmetric fit
-        x=data.T[0]
-        y=-data.T[1]
-        fitfunc = lambda p, x: p[0]*x**2 + p[1]*x**4 + p[2]*x**6 # Target function (split in 2 functions to draw)
-        errfunc = lambda p, x, y: fitfunc(p, x) - y # Distance to the target function
-        p0 = [1,1,1] #starting values
-        p1, success = optimize.leastsq(errfunc, p0[:], args=(x, y))
-        if success:
-            print "Fitted beampipe visible response successfully"
+    def SetGeometryCorrection(self,CalGraph):
+        """ Assign the right Correction Graph to the Sensor """
+        self.CorrectionGraph = CalGraph
+
+    def GetCorrectedDist(self,x,y):
+        """apply calibration and return distance. using the 3D calibration for large angles, x and y are the current sensor position"""
+	if self.CorrectionGraph:
+	    real_r = self.CorrectionGraph.Eval(self.meas_r,rotatePoint([0,0],array([x,y]), -self.angle)[1])
+	else:
+	    real_r = self.meas_r
+        if real_r == 0 :
+            if self.verbosity > 1:
+                print "No calibration data set. Using uncalibrated"
+            return self.meas_r #if 3D calibration fails return uncalibrated distance
         else:
-            print "!Fitted beampipe visible response unsuccessfully"
-            exit(1)
-        self.__seenBeampipe = lambda x: fitfunc(p1,x)
-
-    def __getSeenBeampipe(self,y):
-        if self.__seenBeampipe == None:
-            self.__initVisResponse()
-        return self.__seenBeampipe(y)
-
+            return real_r
 
     def distance_to_beampipe(self, x , y , xe=0 , ye=0 ):
-        """calculate distance for any given point to beam pipe outer circle"""
-        global beampipe_x_shift
-        global beampipe_y_shift
-        global beampipe_r
-        r = math.sqrt((x-beampipe_x_shift)**2 + (y-beampipe_y_shift)**2)
-        distance = math.fabs(beampipe_r - r);
-        ddisdx = 1 / 2 / r * 2 * (x-beampipe_x_shift) #derivative d(distance)/d(x)
-        ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
-        error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
-        return distance , error
-
-    def distance_to_beampipe_corr(self, x , y , xe=0 , ye=0 ):
-        """calculate distance for any given point to beam pipe outer circle but with correction from geometric attenuation of the light"""
-        global beampipe_x_shift
-        global beampipe_y_shift
-        global beampipe_r
-        projP = rotatePoint([0,0],[x,y], -self.angle) #now incident angle of line of sight is parallel to x-axis coming from near side
-        x = projP[0]
-        y = projP[1]
-        beampipe_intersect_x = beampipe_r - self.__getSeenBeampipe(y)
-        distance = abs(beampipe_intersect_x - x)
-        error = sqrt(xe**2+ye**2);
-        return distance, error
-
-    def distance_to_beampipe_corr_new(self, x , y , xe=0 , ye=0 ):
         """calculate distance for any given point to beam pipe outer circle"""
         global beampipe_x_shift
         global beampipe_y_shift
@@ -367,50 +318,7 @@ class infraredBeamPipeSensor(sensor):
         error = sqrt(xe**2+ye**2);
         return distance, error
 
-    def distance_to_beampipe_proj(self, x , y , xe=0 , ye=0 ):
-        """calculate distance for any given point to beam pipe outer circle"""
-        global beampipe_x_shift
-        global beampipe_y_shift
-        global beampipe_r
-        
-        projP = rotatePoint([0,0],[x,y], -self.angle) #now incident angle of line of sight is parallel to x-axis coming from near side
-        #print "projP=",projP
-        
-        activeSensing = activeSensingAreaShift / 2.
-
-        # if abs(projP[1])+abs(activeSensing) < beampipe_r:
-        #     areaOutsideOfCircle = 0
-        # else:
-        #     areaOutsideOfCircle = (abs(projP[1])+abs(activeSensing)-beampipe_r)/(abs(activeSensing)*2) # how much of the sensing area covers space outside the beampipe circle
-        # print "area outside:",areaOutsideOfCircle , math.tanh(areaOutsideOfCircle * math.pi) * beampipe_r
-        # if areaOutsideOfCircle > 1: return -1,xe
-        
-        sensingY = [projP[1]]#np.linspace(abs(projP[1])-abs(activeSensing), min(abs(projP[1])+abs(activeSensing),beampipe_r),num=10)
-        sensingDist = []
-        for y in sensingY:
-            beampipe_intersect_y = y
-            if abs(y) < beampipe_r:
-                beampipe_intersect_x = sqrt(beampipe_r**2-beampipe_intersect_y**2) #r^2=x^2+y^2 -> solve for x
-                sensingDist.append(abs(beampipe_intersect_x - projP[0]))  #line of sight distance
-            elif y > beampipe_r:
-                sensingDist.append(distanceTwoPoints(projP[0],projP[1], 0,beampipe_r))
-            else: #y < beampipe_r
-                sensingDist.append(distanceTwoPoints(projP[0],projP[1], 0,-beampipe_r))
-            
-            
-        distance = sum(sensingDist) / len(sensingDist)
-        #if abs(projP[1]) > beampipe_r:
-        #    distance += (abs(projP[1])-beampipe_r)*(abs(projP[1])-beampipe_r)**2#( math.tanh( (abs(projP[1])/beampipe_r-1) * 5 * math.pi ) +1 ) * beampipe_r #add the beampipe radius for overhanging area = contrain fit
-        #print "Distance:", sensingY, sensingDist, distance
-        error = sqrt(xe**2+ye**2);
-        #ddisdx = 1 / 2 / r * 2 * (x-beampipe_x_shift) #derivative d(distance)/d(x)
-        #ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
-        #error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
-        return distance , error
-
     def _AwayFromTarget(self,pointing_at):
-        """        r = self.GetCalibratedDist3D(rotatePoint([0,0],self.pos+array([x,y]), -self.angle)[1])
-        """
         r = self.meas_r
         error_r = sqrt(2**2 + self.GetDistError()**2) #2 mm sys + stat error
         error_theta = radians(1.5) #deg systematic uncertainty
@@ -424,8 +332,14 @@ class infraredBeamPipeSensor(sensor):
         ye = sqrt( error_r**2 * dpydr**2 + error_theta**2 * dpydtheta**2)#x and y is initial sensor positions from drawings. maybe no uncertainty
 
         if self.verbosity>1: print "xe=",xe,"ye=",ye, " --> delta=",delta,"sigma=",sigma
-        delta,sigma = self.distance_to_beampipe_corr_new(pointing_at[0],pointing_at[1], xe, ye)
+        delta,sigma = self.distance_to_beampipe(pointing_at[0],pointing_at[1], xe, ye)
         return delta,sigma
+
+    def _GetPointingAt(self,x,y):
+        """calculates r in direction of angle. returns pointing absolute position, x and y are the CASTOR shifts"""
+        r = self.GetCorrectedDist(self.pos[0]+x, self.pos[1]+y)
+        return array(self.pos) - array([r * math.cos(radians(self.angle)), r * math.sin(radians(self.angle))]) + array([x,y])
+
 
     def drawNominalPosition(self,label,ax,leglabels,legpointers):
        
@@ -481,7 +395,7 @@ class infraredBeamPipeSensor(sensor):
 
 
     def drawSensor(self,label,color,x,y,ax,leglabels,legpointers):
-        pointing_at = array(self.pos) + array([x,y]) - array([self.GetCalibratedDist3D(self.pos[0]+x, self.pos[1]+y) * math.cos(radians(self.angle)), self.GetCalibratedDist3D(self.pos[0]+x, self.pos[1]+y) * math.sin(radians(self.angle))])
+        pointing_at = array(self.pos) + array([x,y]) - array([self.GetCorrectedDist(self.pos[0]+x, self.pos[1]+y) * math.cos(radians(self.angle)), self.GetCorrectedDist(self.pos[0]+x, self.pos[1]+y) * math.sin(radians(self.angle))])
         sightline = lin.Line2D( [self.pos[0]+x,pointing_at[0]] , [self.pos[1]+y,pointing_at[1]], color=color, label=label)
         if color != "0.5": ax.add_artist(sightline)
         sensor=plt.Circle((self.pos[0]+x,self.pos[1]+y),3,color=color,fill=True, alpha=0.5)
@@ -527,8 +441,7 @@ class fixationPotentiometer(sensor):
 
 ########FITTING########
 verbosity = 1
-fitNonIP = False
-
+fitNonIP = True
 
 ### First: IP side ######
 ######FITTING OLD CASTOR####
@@ -537,8 +450,8 @@ sensor_fartop = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_ra
 sensor_farbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_radius,activeSensingAreaShift], -180+22.5), -180+22.5, "far bot")
 sensor_fartop.SetDist(8.68439,0)
 sensor_farbot.SetDist(20.2883,0.18)
-sensor_farbot.SetGeometryCorrection()
-sensor_fartop.SetGeometryCorrection()
+sensor_farbot.SetGeometryCorrection(None)
+sensor_fartop.SetGeometryCorrection(None)
 #sensor_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
 #sensor_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
 #sensor_fartop.DrawCalibration()
@@ -552,8 +465,8 @@ sensor_nearbot = infraredBeamPipeSensor(rotatePoint([0,0],[castor_inner_octant_r
 #sensor_nearbot.DrawCalibration()
 sensor_neartop.SetDist(15.2248,0.04)
 sensor_nearbot.SetDist(25.8462,0.82)
-sensor_nearbot.SetGeometryCorrection()
-sensor_neartop.SetGeometryCorrection()
+sensor_nearbot.SetGeometryCorrection(None)
+sensor_neartop.SetGeometryCorrection(None)
 
 #potis are fixed to far side. castor flange 200mm minus ~10mm
 sensor_pot_top = openingSensor(190,"potentiometer top")
@@ -580,15 +493,15 @@ sensor_fartop = infraredBeamPipeSensor.fromsensor(sensor_fartop)
 sensor_farbot = infraredBeamPipeSensor.fromsensor(sensor_farbot)
 sensor_fartop.SetDist(12.6556,0)
 sensor_farbot.SetDist(22.2788,0.04)
-sensor_farbot.SetGeometryCorrection()
-sensor_fartop.SetGeometryCorrection()
+sensor_farbot.SetGeometryCorrection(None)
+sensor_fartop.SetGeometryCorrection(None)
 
 sensor_neartop = infraredBeamPipeSensor.fromsensor(sensor_neartop)
 sensor_nearbot = infraredBeamPipeSensor.fromsensor(sensor_nearbot)
 sensor_neartop.SetDist(32.9261,4e-6)
 sensor_nearbot.SetDist(32.6869,0.18)
-sensor_nearbot.SetGeometryCorrection()
-sensor_neartop.SetGeometryCorrection()
+sensor_nearbot.SetGeometryCorrection(None)
+sensor_neartop.SetGeometryCorrection(None)
 
 sensor_pot_top = openingSensor.fromsensor(sensor_pot_top)
 sensor_pot_top.SetDist(19.1,2.) #2 mm uncertainty
@@ -631,9 +544,9 @@ if fitNonIP :
     sensor_nonip_fartop.SetDist(6.27352,0.08)
     sensor_nonip_farcenter.SetDist(13.5765,0.13)
     sensor_nonip_farbot.SetDist(18.7727,0.06)
-    sensor_nonip_fartop.SetGeometryCorrection()
-    sensor_nonip_farcenter.SetGeometryCorrection()
-    sensor_nonip_farbot.SetGeometryCorrection()
+    sensor_nonip_fartop.SetGeometryCorrection(None)
+    sensor_nonip_farcenter.SetGeometryCorrection(None)
+    sensor_nonip_farbot.SetGeometryCorrection(None)
     #sensor_nonip_fartop.SetCalibrationData([0.5,10.1,20.2], [0,10,20])
     #sensor_nonip_farbot.SetCalibrationData([-2.,9.8,19.1], [0,10,20])
     #sensor_nonip_fartop.DrawCalibration()
@@ -649,9 +562,9 @@ if fitNonIP :
     sensor_nonip_neartop.SetDist(13.3061,0.03)
     sensor_nonip_nearcenter.SetDist(26.8516,0)
     sensor_nonip_nearbot.SetDist(21.9653,0.06)
-    sensor_nonip_neartop.SetGeometryCorrection()
-    sensor_nonip_nearcenter.SetGeometryCorrection()
-    sensor_nonip_nearbot.SetGeometryCorrection()
+    sensor_nonip_neartop.SetGeometryCorrection(None)
+    sensor_nonip_nearcenter.SetGeometryCorrection(None)
+    sensor_nonip_nearbot.SetGeometryCorrection(None)
     """
     #potis are fixed to far side. castor flange 200mm minus ~10mm
     sensor_nonip_pot_top = openingSensor(190,"potentiometer top")
@@ -681,9 +594,9 @@ if fitNonIP :
     sensor_nonip_fartop.SetDist(10.7459,0)
     sensor_nonip_farcenter.SetDist(13.5471,0.01)
     sensor_nonip_farbot.SetDist(14.717,0.25)
-    sensor_nonip_fartop.SetGeometryCorrection()
-    sensor_nonip_farcenter.SetGeometryCorrection()
-    sensor_nonip_farbot.SetGeometryCorrection()
+    sensor_nonip_fartop.SetGeometryCorrection(None)
+    sensor_nonip_farcenter.SetGeometryCorrection(None)
+    sensor_nonip_farbot.SetGeometryCorrection(None)
 
     sensor_nonip_neartop = infraredBeamPipeSensor.fromsensor(sensor_nonip_neartop)
     sensor_nonip_nearcenter = infraredBeamPipeSensor.fromsensor(sensor_nonip_nearcenter)    
@@ -691,9 +604,9 @@ if fitNonIP :
     sensor_nonip_neartop.SetDist(15.9262,0.08)
     sensor_nonip_nearcenter.SetDist(23.8852,0.06)
     sensor_nonip_nearbot.SetDist(18.8557,0.06)
-    sensor_nonip_neartop.SetGeometryCorrection()
-    sensor_nonip_nearcenter.SetGeometryCorrection()
-    sensor_nonip_nearbot.SetGeometryCorrection()
+    sensor_nonip_neartop.SetGeometryCorrection(None)
+    sensor_nonip_nearcenter.SetGeometryCorrection(None)
+    sensor_nonip_nearbot.SetGeometryCorrection(None)
     """
     sensor_nonip_pot_top = openingSensor.fromsensor(sensor_pot_top)
     sensor_nonip_pot_top.SetDist(19.1,2.) #2 mm uncertainty
@@ -824,3 +737,74 @@ if fitNonIP :
 
     plt.savefig("ir_nonIP_pos.png",bbox_inches="tight")
     plt.savefig("ir_nonIP_pos.pdf",bbox_inches="tight")
+
+
+
+""" Backup of old code
+    def distance_to_beampipe_old(self, x , y , xe=0 , ye=0 ):
+        calculate distance for any given point to beam pipe outer circle
+        global beampipe_x_shift
+        global beampipe_y_shift
+        global beampipe_r
+        r = math.sqrt((x-beampipe_x_shift)**2 + (y-beampipe_y_shift)**2)
+        distance = math.fabs(beampipe_r - r);
+        ddisdx = 1 / 2 / r * 2 * (x-beampipe_x_shift) #derivative d(distance)/d(x)
+        ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
+        error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
+        return distance , error
+
+    def distance_to_beampipe_corr(self, x , y , xe=0 , ye=0 ):
+        calculate distance for any given point to beam pipe outer circle but with correction from geometric attenuation of the light
+        global beampipe_x_shift
+        global beampipe_y_shift
+        global beampipe_r
+        projP = rotatePoint([0,0],[x,y], -self.angle) #now incident angle of line of sight is parallel to x-axis coming from near side
+        x = projP[0]
+        y = projP[1]
+        beampipe_intersect_x = beampipe_r - self.__getSeenBeampipe(y)
+        distance = abs(beampipe_intersect_x - x)
+        error = sqrt(xe**2+ye**2);
+        return distance, error
+
+    def distance_to_beampipe_proj(self, x , y , xe=0 , ye=0 ):
+        calculate distance for any given point to beam pipe outer circle
+        global beampipe_x_shift
+        global beampipe_y_shift
+        global beampipe_r
+        
+        projP = rotatePoint([0,0],[x,y], -self.angle) #now incident angle of line of sight is parallel to x-axis coming from near side
+        #print "projP=",projP
+        
+        activeSensing = activeSensingAreaShift / 2.
+
+        # if abs(projP[1])+abs(activeSensing) < beampipe_r:
+        #     areaOutsideOfCircle = 0
+        # else:
+        #     areaOutsideOfCircle = (abs(projP[1])+abs(activeSensing)-beampipe_r)/(abs(activeSensing)*2) # how much of the sensing area covers space outside the beampipe circle
+        # print "area outside:",areaOutsideOfCircle , math.tanh(areaOutsideOfCircle * math.pi) * beampipe_r
+        # if areaOutsideOfCircle > 1: return -1,xe
+        
+        sensingY = [projP[1]]#np.linspace(abs(projP[1])-abs(activeSensing), min(abs(projP[1])+abs(activeSensing),beampipe_r),num=10)
+        sensingDist = []
+        for y in sensingY:
+            beampipe_intersect_y = y
+            if abs(y) < beampipe_r:
+                beampipe_intersect_x = sqrt(beampipe_r**2-beampipe_intersect_y**2) #r^2=x^2+y^2 -> solve for x
+                sensingDist.append(abs(beampipe_intersect_x - projP[0]))  #line of sight distance
+            elif y > beampipe_r:
+                sensingDist.append(distanceTwoPoints(projP[0],projP[1], 0,beampipe_r))
+            else: #y < beampipe_r
+                sensingDist.append(distanceTwoPoints(projP[0],projP[1], 0,-beampipe_r))
+            
+            
+        distance = sum(sensingDist) / len(sensingDist)
+        #if abs(projP[1]) > beampipe_r:
+        #    distance += (abs(projP[1])-beampipe_r)*(abs(projP[1])-beampipe_r)**2#( math.tanh( (abs(projP[1])/beampipe_r-1) * 5 * math.pi ) +1 ) * beampipe_r #add the beampipe radius for overhanging area = contrain fit
+        #print "Distance:", sensingY, sensingDist, distance
+        error = sqrt(xe**2+ye**2);
+        #ddisdx = 1 / 2 / r * 2 * (x-beampipe_x_shift) #derivative d(distance)/d(x)
+        #ddisdy = 1 / 2 / r * 2 * (y-beampipe_y_shift)
+        #error = math.sqrt( xe**2 * ddisdx**2 + ye**2 * ddisdy**2)
+        return distance , error
+
+"""
