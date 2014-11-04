@@ -26,7 +26,7 @@ const double castorLength = 15868. - 14390; //from begin to last rib
 
 namespace myFit
 {
-  void FitFunction(int& /*npar*/, double* const /*grad*/, 
+  void FitFunction(int& /*npar*/, double* const /*grad*/,
                    double& chi2, double* const shift,
                    const int /*iFlag*/);
 }
@@ -167,7 +167,7 @@ void CastorHalf::Draw(TGeoManager* geoM)
   TGeoTranslation tar3(f_targetn3->GetX(),f_targetn3->GetY(),f_targetn3->GetZ()-castorLength/2.);
   TGeoHMatrix* posT3 = new TGeoHMatrix(tar3);
   geoW->AddNode(geoTarget3,1,posT3);
-  
+
 
 }
 
@@ -244,17 +244,17 @@ bool CastorHalf::Fit(bool xyonly)
   //INIT MISSING
 
   int ierflag;
-  theFitter.mnparm(0,"x", 0,1,0,0,ierflag);
-  theFitter.mnparm(1,"y", 0,1,0,0,ierflag);
+  theFitter.mnparm(0,"x", -3.51265949,1,0,0,ierflag);
+  theFitter.mnparm(1,"y", -6.70198460,1,0,0,ierflag);
   if(param == 4)
     {
-    theFitter.mnparm(2,"theta", 0,0.1,-1,1,ierflag);
-    theFitter.mnparm(3,"rho", 0,0.1,-1,1,ierflag);
+    theFitter.mnparm(2,"theta", -0.03663225*TMath::DegToRad(),0.1,-1,1,ierflag);
+    theFitter.mnparm(3,"rho", 0.25810476*TMath::DegToRad(),0.1,-1,1,ierflag);
     }
 
   double arglist[2]={100000, 0.1}; //calls, tolerance default 0.1
   theFitter.mnexcm("MIGRAD", arglist, 2, ierflag); //arglist has 2 params
-  
+
   if (ierflag)
     {
       std::cerr << " MIGRAD failed. Error: " << ierflag << std::endl;
@@ -302,9 +302,9 @@ bool CastorHalf::Fit(bool xyonly)
 }
 #endif //#ifndef _CASTOR_H_
 
-void myFit::FitFunction(int& npar, double* const /*grad*/, 
+void myFit::FitFunction(int& npar, double* const /*grad*/,
                              double& chi2, double* const shift,
-                             const int /*iFlag*/) 
+                             const int /*iFlag*/)
 {
   const double x = shift[0];
   const double y = shift[1];
@@ -344,7 +344,7 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
   const double r1 = t1->GetDistance(tn1);
   const double r2 = t2->GetDistance(tn2);
   const double r3 = t3->GetDistance(tn3);
-  
+
   const double r1e = t1->GetDistanceError(tn1);
   const double r2e = t2->GetDistanceError(tn2);
   const double r3e = t3->GetDistanceError(tn3);
@@ -354,9 +354,14 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
   chi2 += pow(r2 / r2e,2); //mid point at castor front
   chi2 += pow(r3 / r3e,2);
 
-  std::cerr << std::fixed << std::setprecision(2) << "x=" << x << "  y=" << y << " th=" << theta/TMath::DegToRad() << " rh=" << rho/TMath::DegToRad() << "   chi2=" << chi2 << "   r1=" << r1 << " r2=" << r2 << "   r1e=" << r1e << " r2e=" << r2e << "   dx1=" << t1->GetX() << "/" << tn1->GetX() << "   dx2=" << t2->GetX() << "/" << tn2->GetX() << "   dx3=" << t3->GetX() << "/" << tn3->GetX() << std::endl;
+  std::cerr << std::fixed << std::setprecision(8) << "x=" << x << "  y=" << y << " th=" << theta/TMath::DegToRad() << " rh=" << rho/TMath::DegToRad()
+            << "   chi2=" << chi2 << "   r1=" << r1 << " r2=" << r2 << " r3=" << r3 << "   r1e=" << r1e << " r2e=" << r2e << std::endl
+            << "  dx1=" << t1->GetX() << "/" << tn1->GetX() << " dx2=" << t2->GetX() << "/" << tn2->GetX() << "  dx3=" << t3->GetX() << "/" << tn3->GetX() << std::endl
+            << "  dy1=" << t1->GetY() << "/" << tn1->GetY() << " dy2=" << t2->GetY() << "/" << tn2->GetY() << "  dy3=" << t3->GetY() << "/" << tn3->GetY() << std::endl
+            << "  dz1=" << t1->GetZ() << "/" << tn1->GetZ() << " dz2=" << t2->GetZ() << "/" << tn2->GetZ() << "  dz3=" << t3->GetZ() << "/" << tn3->GetZ() << std::endl
+            << std::endl;
   std::cerr << std::fixed << std::setprecision(3) << "x1=" << t1->GetX() << " y1=" << t1->GetY() << " z1=" << t1->GetZ() << std::endl;
-  
+
   delete t1,t2,t3;
   delete tn1,tn2,tn3;
 
