@@ -1,0 +1,7 @@
+--Installation--
+ROOT needs to be installed and environment set
+run "make" in you terminal
+
+--Run--
+to run start "./main"
+in the terminal output appears as x,y,phi,rho
