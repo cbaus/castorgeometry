@@ -104,8 +104,8 @@ int main(int argc, char** argv)
   txt_near_ss.str(""); txt_near_ss<< "Near side"; txt_near->AddText(txt_near_ss.str().c_str());
   txt_near_ss.str(""); txt_near_ss<< "x=" << nearHalf.GetCenter()->GetX(); txt_near->AddText(txt_near_ss.str().c_str());
   txt_near_ss.str(""); txt_near_ss<< "y=" << nearHalf.GetCenter()->GetY(); txt_near->AddText(txt_near_ss.str().c_str());
-  txt_near_ss.str(""); txt_near_ss<< "#theta=" << nearHalf.GetTheta()/TMath::DegToRad(); txt_near->AddText(txt_near_ss.str().c_str());
-  txt_near_ss.str(""); txt_near_ss<< "#rho=" << nearHalf.GetRho()/TMath::DegToRad(); txt_near->AddText(txt_near_ss.str().c_str());
+  txt_near_ss.str(""); txt_near_ss<< "#theta=" << nearHalf.GetTheta()/TMath::DegToRad() << "#circ"; txt_near->AddText(txt_near_ss.str().c_str());
+  txt_near_ss.str(""); txt_near_ss<< "#rho=" << nearHalf.GetRho()/TMath::DegToRad() << "#circ"; txt_near->AddText(txt_near_ss.str().c_str());
 
   TPaveText* txt_far = new TPaveText(0.2,0.7,0.4,0.85,"NDC b t l");
   txt_far->SetTextFont(42);
@@ -118,18 +118,18 @@ int main(int argc, char** argv)
   txt_far_ss.str(""); txt_far_ss<< "Far side"; txt_far->AddText(txt_far_ss.str().c_str());
   txt_far_ss.str(""); txt_far_ss<< "x=" << farHalf.GetCenter()->GetX(); txt_far->AddText(txt_far_ss.str().c_str());
   txt_far_ss.str(""); txt_far_ss<< "y=" << farHalf.GetCenter()->GetY(); txt_far->AddText(txt_far_ss.str().c_str());
-  txt_far_ss.str(""); txt_far_ss<< "#theta=" << farHalf.GetTheta()/TMath::DegToRad(); txt_far->AddText(txt_far_ss.str().c_str());
-  txt_far_ss.str(""); txt_far_ss<< "#rho=" << farHalf.GetRho()/TMath::DegToRad(); txt_far->AddText(txt_far_ss.str().c_str());
+  txt_far_ss.str(""); txt_far_ss<< "#theta=" << farHalf.GetTheta()/TMath::DegToRad() << "#circ"; txt_far->AddText(txt_far_ss.str().c_str());
+  txt_far_ss.str(""); txt_far_ss<< "#rho=" << farHalf.GetRho()/TMath::DegToRad() << "#circ"; txt_far->AddText(txt_far_ss.str().c_str());
 
 
-  // TCanvas can1;
-  // can1.SetGrid();
-  // TH2D* frame = new TH2D("frame",";x [mm];y [mm]",100,-15,15,100,-15,15);
-  // frame->SetStats(kFALSE);
-  // frame->Draw("AXIS");
-  // farHalf.DrawXY(kRed);
-  // nearHalf.DrawXY(kBlue);
-  // can1.SaveAs("plotZoom.pdf");
+  TCanvas can1;
+  can1.SetGrid();
+  TH2D* frame = new TH2D("frame",";x [mm];y [mm]",100,-15,15,100,-15,15);
+  frame->SetStats(kFALSE);
+  frame->Draw("AXIS");
+  farHalf.DrawXY(kRed);
+  nearHalf.DrawXY(kBlue);
+  can1.SaveAs("plotZoom.pdf");
 
 
   TCanvas can2;
@@ -159,6 +159,21 @@ int main(int argc, char** argv)
   geoM->Export("test.C");
   std:: cout << "bla" << std:: endl;
   //can3.SaveAs("plot.pdf");
+
+  cout << endl
+       << "***************************RESULTS*****************************" << endl
+       << "* " << "Far side" << endl
+       << "* " << "x=" << farHalf.GetCenter()->GetX() << endl
+       << "* " << "y=" << farHalf.GetCenter()->GetY() << endl
+       << "* " << "theta=" << farHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
+       << "* " << "rho=" << farHalf.GetRho()/TMath::DegToRad() << " degree" << endl
+       << "***************************************************************" << endl;
+  cout << "* " << "Near side" << endl
+       << "* " << "x=" << nearHalf.GetCenter()->GetX() << endl
+       << "* " << "y=" << nearHalf.GetCenter()->GetY() << endl
+       << "* " << "theta=" << nearHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
+       << "* " << "rho=" << nearHalf.GetRho()/TMath::DegToRad() << " degree" << endl
+       << "***************************RESULTS*****************************" << endl << endl;
 
   return 0;
 }
