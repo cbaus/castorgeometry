@@ -32,35 +32,35 @@ namespace myFit
 }
 
 class CastorHalf {
-public:
-  CastorHalf(bool farNotNear): f_theta(0)
-  {
-    f_center = new Point(0.,0.,0.);
-    f_target1 = new Point(0.,0.,0.);
-    f_target2 = new Point(0.,0.,0.);
-    f_target3 = new Point(0.,0.,0.);
-    f_far=farNotNear;
+ public:
+ CastorHalf(bool farNotNear): f_theta(0)
+    {
+      f_center = new Point(0.,0.,0.);
+      f_target1 = new Point(0.,0.,0.);
+      f_target2 = new Point(0.,0.,0.);
+      f_target3 = new Point(0.,0.,0.);
+      f_far=farNotNear;
 
-    if(f_far)
-      {
-        f_targetn1 = new Point(-90.96 , +317.21, castorLength);
-        f_targetn2 = new Point(-317.21, +90.96,  castorLength-1010.);
-        f_targetn3 = new Point(-317.21, -90.96,  castorLength);
-      }
-    else //if near
-      {
-        f_targetn1 = new Point(+92.90, +316.38, castorLength);
-        f_targetn2 = new Point(+316.38, +92.90, castorLength-1010.);
-        f_targetn3 = new Point(+316.38, -92.90, castorLength);
-      }
-  }
+      if(f_far)
+        {
+          f_targetn1 = new Point(-90.96 , +317.21, castorLength);
+          f_targetn2 = new Point(-317.21, +90.96,  castorLength-1010.);
+          f_targetn3 = new Point(-317.21, -90.96,  castorLength);
+        }
+      else //if near
+        {
+          f_targetn1 = new Point(+92.90, +316.38, castorLength);
+          f_targetn2 = new Point(+316.38, +92.90, castorLength-1010.);
+          f_targetn3 = new Point(+316.38, -92.90, castorLength);
+        }
+    }
   ~CastorHalf()
-  {
-    delete f_center;
-    delete f_target1;
-    delete f_target2;
-    delete f_target3;
-  }
+    {
+      delete f_center;
+      delete f_target1;
+      delete f_target2;
+      delete f_target3;
+    }
   void Draw(TGeoManager* geoM);
   void DrawXY(Color_t col);
   double GetTheta() {return f_theta;}
@@ -75,7 +75,7 @@ public:
   void Rotate(double theta) {f_theta = theta;}
   bool Fit(bool xyonly);
   void Translate(double x, double y, double z);
-private:
+ private:
   Point* f_center;
   double f_theta;
   double f_rho;
@@ -124,11 +124,11 @@ void CastorHalf::Draw(TGeoManager* geoM)
   TGeoTranslation t0i(0,0,-castorLength/2.);
   TGeoTranslation t1(f_center->GetX(),f_center->GetY(),0);
 
-  std::cout << "Shifting by " << f_center->GetX() << " " << f_center->GetY() << std::endl;
+  //std::cout << "Shifting by " << f_center->GetX() << " " << f_center->GetY() << std::endl;
   TGeoRotation r1;
   r1.RotateY(f_theta);
   TGeoHMatrix pos;
-    pos = t1 * t0i * r1 * t0 ;
+  pos = t1 * t0i * r1 * t0 ;
   TGeoHMatrix* posP = new TGeoHMatrix(pos);
   TGeoVolume* geoW = geoM->GetMasterVolume();
   //if(f_far)
@@ -180,7 +180,6 @@ void CastorHalf::DrawXY(Color_t col)
 
 
   m = new TMarker(f_target1->GetX(),f_target1->GetY(),24);
-  std::cout << "drawing x,y,z: " << f_target1->GetX() << " " << f_target1->GetY() << std::endl;
   m->SetMarkerSize(2);
   m->SetMarkerColor(col);
   m->Draw("SAME");
@@ -196,31 +195,35 @@ void CastorHalf::DrawXY(Color_t col)
   m->Draw("SAME");
 
   //nominal as crosses
-  f_targetn1->RotateX(f_theta);
-  f_targetn1->RotateY(f_rho);
-  f_targetn1->Translate(f_center->GetX(),f_center->GetY(),0);
-  f_targetn2->RotateX(f_theta);
-  f_targetn2->RotateY(f_rho);
-  f_targetn2->Translate(f_center->GetX(),f_center->GetY(),0);
-  f_targetn3->RotateX(f_theta);
-  f_targetn3->RotateY(f_rho);
-  f_targetn3->Translate(f_center->GetX(),f_center->GetY(),0);
+  Point* targetn1 = new Point(f_targetn1); //copy for drawing. delete later
+  Point* targetn2 = new Point(f_targetn2);
+  Point* targetn3 = new Point(f_targetn3);
+  targetn1->RotateX(f_theta);
+  targetn1->RotateY(f_rho);
+  targetn1->Translate(f_center->GetX(),f_center->GetY(),0);
+  targetn2->RotateX(f_theta);
+  targetn2->RotateY(f_rho);
+  targetn2->Translate(f_center->GetX(),f_center->GetY(),0);
+  targetn3->RotateX(f_theta);
+  targetn3->RotateY(f_rho);
+  targetn3->Translate(f_center->GetX(),f_center->GetY(),0);
 
-  m = new TMarker(f_targetn1->GetX(),f_targetn1->GetY(),5);
-  m->SetMarkerSize(2);
-  m->SetMarkerColor(col);
-  m->Draw("SAME");
-  std::cout << "drawing nom x,y,z: " << f_center->GetX() << " " << f_targetn1->GetX() << " " << f_targetn1->GetY() << std::endl;
-
-  m = new TMarker(f_targetn2->GetX(),f_targetn2->GetY(),5);
+  m = new TMarker(targetn1->GetX(),targetn1->GetY(),5);
   m->SetMarkerSize(2);
   m->SetMarkerColor(col);
   m->Draw("SAME");
 
-  m = new TMarker(f_targetn3->GetX(),f_targetn3->GetY(),5);
+  m = new TMarker(targetn2->GetX(),targetn2->GetY(),5);
   m->SetMarkerSize(2);
   m->SetMarkerColor(col);
   m->Draw("SAME");
+
+  m = new TMarker(targetn3->GetX(),targetn3->GetY(),5);
+  m->SetMarkerSize(2);
+  m->SetMarkerColor(col);
+  m->Draw("SAME");
+
+  delete targetn1, targetn2, targetn3;
 
 
 }
@@ -257,16 +260,12 @@ bool CastorHalf::Fit(bool xyonly)
   //INIT MISSING
 
   int ierflag;
-   /* theFitter.mnparm(0,"x", -2.51265949,1,0,0,ierflag); */
-   /* theFitter.mnparm(1,"y", -6.70198460,1,0,0,ierflag); */
   theFitter.mnparm(0,"x", 0,1,0,0,ierflag);
   theFitter.mnparm(1,"y", 0,1,0,0,ierflag);
   if(param == 4)
     {
-    /* theFitter.mnparm(2,"theta", -0.03663225*TMath::DegToRad(),0.1,-1,1,ierflag); */
-    /* theFitter.mnparm(3,"rho", 0.25810476*TMath::DegToRad(),0.1,-1,1,ierflag); */
-    theFitter.mnparm(2,"theta", 0,0.1,-1,1,ierflag);
-    theFitter.mnparm(3,"rho", 0,0.1,-1,1,ierflag);
+      theFitter.mnparm(2,"theta", 0,0.1,-1,1,ierflag);
+      theFitter.mnparm(3,"rho", 0,0.1,-1,1,ierflag);
     }
 
   double arglist[2]={100000, 0.1}; //calls, tolerance default 0.1
@@ -292,8 +291,8 @@ bool CastorHalf::Fit(bool xyonly)
   theFitter.GetParameter(1,y,ye);
   if(param == 4)
     {
-    theFitter.GetParameter(2,theta,thetae);
-    theFitter.GetParameter(3,rho,rhoe);
+      theFitter.GetParameter(2,theta,thetae);
+      theFitter.GetParameter(3,rho,rhoe);
     }
 
   Point shift(x,y,0);
@@ -320,8 +319,8 @@ bool CastorHalf::Fit(bool xyonly)
 #endif //#ifndef _CASTOR_H_
 
 void myFit::FitFunction(int& npar, double* const /*grad*/,
-                             double& chi2, double* const shift,
-                             const int /*iFlag*/)
+                        double& chi2, double* const shift,
+                        const int /*iFlag*/)
 {
   const double x = shift[0];
   const double y = shift[1];
@@ -330,8 +329,8 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
 
   if(npar > 2)
     {
-    theta = shift[2];
-    rho = shift[3];
+      theta = shift[2];
+      rho = shift[3];
     }
 
   TVector* targets = (TVector*) gMinuit->GetObjectFit();
@@ -371,12 +370,12 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
   chi2 += pow(r2 / r2e,2); //mid point at castor front
   chi2 += pow(r3 / r3e,2);
 
-  std::cerr << std::fixed << std::setprecision(8) << "x=" << x << "  y=" << y << " th=" << theta/TMath::DegToRad() << " rh=" << rho/TMath::DegToRad()
-            << "   chi2=" << chi2 << "   r1=" << r1 << " r2=" << r2 << " r3=" << r3 << "   r1e=" << r1e << " r2e=" << r2e << std::endl
-            << "  dx1=" << t1->GetX() << "/" << tn1->GetX() << " dx2=" << t2->GetX() << "/" << tn2->GetX() << "  dx3=" << t3->GetX() << "/" << tn3->GetX() << std::endl
-            << "  dy1=" << t1->GetY() << "/" << tn1->GetY() << " dy2=" << t2->GetY() << "/" << tn2->GetY() << "  dy3=" << t3->GetY() << "/" << tn3->GetY() << std::endl
-            << "  dz1=" << t1->GetZ() << "/" << tn1->GetZ() << " dz2=" << t2->GetZ() << "/" << tn2->GetZ() << "  dz3=" << t3->GetZ() << "/" << tn3->GetZ() << std::endl
-            << std::endl;
+  /* std::cerr << std::fixed << std::setprecision(8) << "x=" << x << "  y=" << y << " th=" << theta/TMath::DegToRad() << " rh=" << rho/TMath::DegToRad() */
+  /*           << "   chi2=" << chi2 << "   r1=" << r1 << " r2=" << r2 << " r3=" << r3 << "   r1e=" << r1e << " r2e=" << r2e << std::endl */
+  /*           << "  dx1=" << t1->GetX() << "/" << tn1->GetX() << " dx2=" << t2->GetX() << "/" << tn2->GetX() << "  dx3=" << t3->GetX() << "/" << tn3->GetX() << std::endl */
+  /*           << "  dy1=" << t1->GetY() << "/" << tn1->GetY() << " dy2=" << t2->GetY() << "/" << tn2->GetY() << "  dy3=" << t3->GetY() << "/" << tn3->GetY() << std::endl */
+  /*           << "  dz1=" << t1->GetZ() << "/" << tn1->GetZ() << " dz2=" << t2->GetZ() << "/" << tn2->GetZ() << "  dz3=" << t3->GetZ() << "/" << tn3->GetZ() << std::endl */
+  /*           << std::endl; */
 
   delete t1,t2,t3;
   delete tn1,tn2,tn3;

@@ -3,5 +3,16 @@ ROOT needs to be installed and environment set
 run "make" in you terminal
 
 --Run--
-to run start "./main"
+to run start "./main <MeasurementFile>"
 in the terminal output appears as x,y,phi,rho
+
+--Measurement file--
+Contains 3 numbers x,y,z in [m] in each row
+FARTOP
+FARMID
+FARBOT
+NEARTOP
+NEARMID
+NEARBOT
+
+see example SensorMeasurement-2013-01.cfg
