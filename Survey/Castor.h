@@ -180,6 +180,7 @@ void CastorHalf::DrawXY(Color_t col)
 
 
   m = new TMarker(f_target1->GetX(),f_target1->GetY(),24);
+  std::cout << "drawing x,y,z: " << f_target1->GetX() << " " << f_target1->GetY() << std::endl;
   m->SetMarkerSize(2);
   m->SetMarkerColor(col);
   m->Draw("SAME");
@@ -194,17 +195,29 @@ void CastorHalf::DrawXY(Color_t col)
   m->SetMarkerColor(col);
   m->Draw("SAME");
 
-  m = new TMarker(f_center->GetX()+f_targetn1->GetX(),f_center->GetY()+f_targetn1->GetY(),5);
+  //nominal as crosses
+  f_targetn1->RotateX(f_theta);
+  f_targetn1->RotateY(f_rho);
+  f_targetn1->Translate(f_center->GetX(),f_center->GetY(),0);
+  f_targetn2->RotateX(f_theta);
+  f_targetn2->RotateY(f_rho);
+  f_targetn2->Translate(f_center->GetX(),f_center->GetY(),0);
+  f_targetn3->RotateX(f_theta);
+  f_targetn3->RotateY(f_rho);
+  f_targetn3->Translate(f_center->GetX(),f_center->GetY(),0);
+
+  m = new TMarker(f_targetn1->GetX(),f_targetn1->GetY(),5);
+  m->SetMarkerSize(2);
+  m->SetMarkerColor(col);
+  m->Draw("SAME");
+  std::cout << "drawing nom x,y,z: " << f_center->GetX() << " " << f_targetn1->GetX() << " " << f_targetn1->GetY() << std::endl;
+
+  m = new TMarker(f_targetn2->GetX(),f_targetn2->GetY(),5);
   m->SetMarkerSize(2);
   m->SetMarkerColor(col);
   m->Draw("SAME");
 
-  m = new TMarker(f_center->GetX()+f_targetn2->GetX(),f_center->GetY()+f_targetn2->GetY(),5);
-  m->SetMarkerSize(2);
-  m->SetMarkerColor(col);
-  m->Draw("SAME");
-
-  m = new TMarker(f_center->GetX()+f_targetn3->GetX(),f_center->GetY()+f_targetn3->GetY(),5);
+  m = new TMarker(f_targetn3->GetX(),f_targetn3->GetY(),5);
   m->SetMarkerSize(2);
   m->SetMarkerColor(col);
   m->Draw("SAME");
@@ -244,12 +257,16 @@ bool CastorHalf::Fit(bool xyonly)
   //INIT MISSING
 
   int ierflag;
-  theFitter.mnparm(0,"x", -3.51265949,1,0,0,ierflag);
-  theFitter.mnparm(1,"y", -6.70198460,1,0,0,ierflag);
+   /* theFitter.mnparm(0,"x", -2.51265949,1,0,0,ierflag); */
+   /* theFitter.mnparm(1,"y", -6.70198460,1,0,0,ierflag); */
+  theFitter.mnparm(0,"x", 0,1,0,0,ierflag);
+  theFitter.mnparm(1,"y", 0,1,0,0,ierflag);
   if(param == 4)
     {
-    theFitter.mnparm(2,"theta", -0.03663225*TMath::DegToRad(),0.1,-1,1,ierflag);
-    theFitter.mnparm(3,"rho", 0.25810476*TMath::DegToRad(),0.1,-1,1,ierflag);
+    /* theFitter.mnparm(2,"theta", -0.03663225*TMath::DegToRad(),0.1,-1,1,ierflag); */
+    /* theFitter.mnparm(3,"rho", 0.25810476*TMath::DegToRad(),0.1,-1,1,ierflag); */
+    theFitter.mnparm(2,"theta", 0,0.1,-1,1,ierflag);
+    theFitter.mnparm(3,"rho", 0,0.1,-1,1,ierflag);
     }
 
   double arglist[2]={100000, 0.1}; //calls, tolerance default 0.1
@@ -360,7 +377,6 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
             << "  dy1=" << t1->GetY() << "/" << tn1->GetY() << " dy2=" << t2->GetY() << "/" << tn2->GetY() << "  dy3=" << t3->GetY() << "/" << tn3->GetY() << std::endl
             << "  dz1=" << t1->GetZ() << "/" << tn1->GetZ() << " dz2=" << t2->GetZ() << "/" << tn2->GetZ() << "  dz3=" << t3->GetZ() << "/" << tn3->GetZ() << std::endl
             << std::endl;
-  std::cerr << std::fixed << std::setprecision(3) << "x1=" << t1->GetX() << " y1=" << t1->GetY() << " z1=" << t1->GetZ() << std::endl;
 
   delete t1,t2,t3;
   delete tn1,tn2,tn3;
