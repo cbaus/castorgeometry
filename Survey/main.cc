@@ -7,6 +7,7 @@
 #include <TMath.h>
 #include <TPaveText.h>
 #include <TStyle.h>
+#include <TLegend.h>
 
 #include <string>
 #include <fstream>
@@ -93,31 +94,33 @@ int main(int argc, char** argv)
   cout << endl << endl << " ---NEAR:---" << endl << endl;
   nearHalf.Fit(0);
 
-  TPaveText* txt_near = new TPaveText(0.6,0.7,0.8,0.85,"NDC b t l");
+  TPaveText* txt_near = new TPaveText(0.60,0.6,0.75,0.75,"NDC");
   txt_near->SetTextFont(42);
-  txt_near->SetFillStyle(0);
-  txt_near->SetTextColor(kBlack);
+  txt_near->SetFillColor(kWhite);
+  txt_near->SetTextColor(kBlue);
+  txt_near->SetLineColor(kBlue);
   txt_near->SetTextSize(0.033);
-  txt_near->SetBorderSize(0);
+  txt_near->SetBorderSize(1);
   ostringstream txt_near_ss;
   txt_near_ss.precision(2);
   txt_near_ss.str(""); txt_near_ss<< "Near side"; txt_near->AddText(txt_near_ss.str().c_str());
-  txt_near_ss.str(""); txt_near_ss<< "x=" << nearHalf.GetCenter()->GetX(); txt_near->AddText(txt_near_ss.str().c_str());
-  txt_near_ss.str(""); txt_near_ss<< "y=" << nearHalf.GetCenter()->GetY(); txt_near->AddText(txt_near_ss.str().c_str());
+  txt_near_ss.str(""); txt_near_ss<< "x=" << nearHalf.GetCenter()->GetX() << " mm"; txt_near->AddText(txt_near_ss.str().c_str());
+  txt_near_ss.str(""); txt_near_ss<< "y=" << nearHalf.GetCenter()->GetY() << " mm"; txt_near->AddText(txt_near_ss.str().c_str());
   txt_near_ss.str(""); txt_near_ss<< "#theta=" << nearHalf.GetTheta()/TMath::DegToRad() << "#circ"; txt_near->AddText(txt_near_ss.str().c_str());
   txt_near_ss.str(""); txt_near_ss<< "#rho=" << nearHalf.GetRho()/TMath::DegToRad() << "#circ"; txt_near->AddText(txt_near_ss.str().c_str());
 
-  TPaveText* txt_far = new TPaveText(0.2,0.7,0.4,0.85,"NDC b t l");
+  TPaveText* txt_far = new TPaveText(0.25,0.6,0.4,0.75,"NDC");
   txt_far->SetTextFont(42);
-  txt_far->SetFillStyle(0);
-  txt_far->SetTextColor(kBlack);
+  txt_far->SetFillColor(kWhite);
+  txt_far->SetTextColor(kRed);
+  txt_far->SetLineColor(kRed);
   txt_far->SetTextSize(0.033);
-  txt_far->SetBorderSize(0);
+  txt_far->SetBorderSize(1);
   ostringstream txt_far_ss;
   txt_far_ss.precision(2);
   txt_far_ss.str(""); txt_far_ss<< "Far side"; txt_far->AddText(txt_far_ss.str().c_str());
-  txt_far_ss.str(""); txt_far_ss<< "x=" << farHalf.GetCenter()->GetX(); txt_far->AddText(txt_far_ss.str().c_str());
-  txt_far_ss.str(""); txt_far_ss<< "y=" << farHalf.GetCenter()->GetY(); txt_far->AddText(txt_far_ss.str().c_str());
+  txt_far_ss.str(""); txt_far_ss<< "x=" << farHalf.GetCenter()->GetX() << " mm"; txt_far->AddText(txt_far_ss.str().c_str());
+  txt_far_ss.str(""); txt_far_ss<< "y=" << farHalf.GetCenter()->GetY() << " mm"; txt_far->AddText(txt_far_ss.str().c_str());
   txt_far_ss.str(""); txt_far_ss<< "#theta=" << farHalf.GetTheta()/TMath::DegToRad() << "#circ"; txt_far->AddText(txt_far_ss.str().c_str());
   txt_far_ss.str(""); txt_far_ss<< "#rho=" << farHalf.GetRho()/TMath::DegToRad() << "#circ"; txt_far->AddText(txt_far_ss.str().c_str());
 
@@ -139,11 +142,22 @@ int main(int argc, char** argv)
   grid->Draw("AXIS");
   farHalf.DrawXY(kRed);
   nearHalf.DrawXY(kBlue);
-  txt_far->Draw("SAME");
-  txt_near->Draw("SAME");
+  txt_far->Draw("BR ARC");
+  txt_near->Draw("BR ARC");
+  TLegend leg(0.4,0.25,0.6,0.4);
+  //histogram because root doesn't take attributes if new TMarker is initialised here
+  TH1D* helper = new TH1D("a","a",0,0,1); helper->SetMarkerStyle(20); helper->SetMarkerSize(2); helper->SetMarkerColor(kRed);
+  leg.AddEntry(helper,"shift","p");
+  helper = new TH1D("a","a",0,0,1); helper->SetMarkerStyle(24); helper->SetMarkerSize(2); helper->SetMarkerColor(kRed);
+  leg.AddEntry(helper,"measured target positions","p");
+  helper = new TH1D("a","a",0,0,1); helper->SetMarkerStyle(5); helper->SetMarkerSize(2); helper->SetMarkerColor(kRed);
+  leg.AddEntry(helper,"nominal target pos + shift","p");
+  leg.SetFillColor(kWhite);
+  leg.Draw();
   can2.SaveAs("plot.pdf");
   can2.SaveAs("plot.C");
   can2.SaveAs("plot.png");
+
 
 
   TCanvas can3;
@@ -157,7 +171,6 @@ int main(int argc, char** argv)
   geoM->Draw();
   geoM->CloseGeometry();
   geoM->Export("test.C");
-  std:: cout << "bla" << std:: endl;
   //can3.SaveAs("plot.pdf");
 
   cout << endl
