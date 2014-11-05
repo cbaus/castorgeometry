@@ -33,7 +33,7 @@ namespace myFit
 
 class CastorHalf {
  public:
- CastorHalf(bool farNotNear): f_theta(0)
+ CastorHalf(bool farNotNear): f_theta(0), f_center_nonip(0)
     {
       f_center = new Point(0.,0.,0.);
       f_target1 = new Point(0.,0.,0.);
@@ -57,6 +57,7 @@ class CastorHalf {
   ~CastorHalf()
     {
       delete f_center;
+      delete f_center_nonip;
       delete f_target1;
       delete f_target2;
       delete f_target3;
@@ -66,6 +67,7 @@ class CastorHalf {
   double GetTheta() {return f_theta;}
   double GetRho() {return f_rho;}
   Point* GetCenter() {return f_center;}
+  Point* GetCenterNonIP();
   Point* GetTarget1() {return new Point(*f_center+*f_target1);}
   Point* GetTarget2() {return new Point(*f_center+*f_target2);}
   Point* GetTarget3() {return new Point(*f_center+*f_target3);}
@@ -77,6 +79,7 @@ class CastorHalf {
   void Translate(double x, double y, double z);
  private:
   Point* f_center;
+  Point* f_center_nonip;
   double f_theta;
   double f_rho;
   Point* f_target1;
@@ -377,4 +380,17 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
   delete tn1,tn2,tn3;
 
   return;
+}
+
+
+Point* CastorHalf::GetCenterNonIP()
+{
+  if (f_center_nonip != 0)
+    delete f_center_nonip;
+  f_center_nonip = new Point(f_center);
+
+  f_center_nonip->SetZ(castorLength);
+  f_center_nonip->RotateX(f_theta);
+  f_center_nonip->RotateY(f_rho);
+  return f_center_nonip;
 }

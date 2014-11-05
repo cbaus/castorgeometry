@@ -142,8 +142,8 @@ int main(int argc, char** argv)
   grid->Draw("AXIS");
   farHalf.DrawXY(kRed);
   nearHalf.DrawXY(kBlue);
-  txt_far->Draw("BR ARC");
-  txt_near->Draw("BR ARC");
+  txt_far->Draw("BR");
+  txt_near->Draw("BR");
   TLegend leg(0.4,0.25,0.6,0.4);
   //histogram because root doesn't take attributes if new TMarker is initialised here
   TH1D* helper = new TH1D("a","a",0,0,1); helper->SetMarkerStyle(20); helper->SetMarkerSize(2); helper->SetMarkerColor(kRed);
@@ -180,12 +180,16 @@ int main(int argc, char** argv)
        << "* " << "y=" << farHalf.GetCenter()->GetY() << endl
        << "* " << "theta=" << farHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
        << "* " << "rho=" << farHalf.GetRho()/TMath::DegToRad() << " degree" << endl
+       << "* " << "x (nonIP)=" << farHalf.GetCenterNonIP()->GetX() << endl
+       << "* " << "y (nonIP)=" << farHalf.GetCenterNonIP()->GetY() << endl
        << "***************************************************************" << endl;
   cout << "* " << "Near side" << endl
        << "* " << "x=" << nearHalf.GetCenter()->GetX() << endl
        << "* " << "y=" << nearHalf.GetCenter()->GetY() << endl
        << "* " << "theta=" << nearHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
        << "* " << "rho=" << nearHalf.GetRho()/TMath::DegToRad() << " degree" << endl
+       << "* " << "x (nonIP)=" << nearHalf.GetCenterNonIP()->GetX() << endl
+       << "* " << "y (nonIP)=" << nearHalf.GetCenterNonIP()->GetY() << endl
        << "***************************RESULTS*****************************" << endl << endl;
 
   return 0;
