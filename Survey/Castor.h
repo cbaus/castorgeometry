@@ -369,12 +369,12 @@ void myFit::FitFunction(int& npar, double* const /*grad*/,
   chi2 += pow(r2 / r2e,2); //mid point at castor front
   chi2 += pow(r3 / r3e,2);
 
-  std::cerr << std::fixed << std::setprecision(8) << "x=" << x << "  y=" << y << " th=" << theta/TMath::DegToRad() << " rh=" << rho/TMath::DegToRad()
-            << "   chi2=" << chi2 << "   r1=" << r1 << " r2=" << r2 << " r3=" << r3 << "   r1e=" << r1e << " r2e=" << r2e << std::endl
-            << "  dx1=" << t1->GetX() << "/" << tn1->GetX() << " dx2=" << t2->GetX() << "/" << tn2->GetX() << "  dx3=" << t3->GetX() << "/" << tn3->GetX() << std::endl
-            << "  dy1=" << t1->GetY() << "/" << tn1->GetY() << " dy2=" << t2->GetY() << "/" << tn2->GetY() << "  dy3=" << t3->GetY() << "/" << tn3->GetY() << std::endl
-            << "  dz1=" << t1->GetZ() << "/" << tn1->GetZ() << " dz2=" << t2->GetZ() << "/" << tn2->GetZ() << "  dz3=" << t3->GetZ() << "/" << tn3->GetZ() << std::endl
-            << std::endl;
+  /* std::cerr << std::fixed << std::setprecision(8) << "x=" << x << "  y=" << y << " th=" << theta/TMath::DegToRad() << " rh=" << rho/TMath::DegToRad() */
+  /*           << "   chi2=" << chi2 << "   r1=" << r1 << " r2=" << r2 << " r3=" << r3 << "   r1e=" << r1e << " r2e=" << r2e << std::endl */
+  /*           << "  dx1=" << t1->GetX() << "/" << tn1->GetX() << " dx2=" << t2->GetX() << "/" << tn2->GetX() << "  dx3=" << t3->GetX() << "/" << tn3->GetX() << std::endl */
+  /*           << "  dy1=" << t1->GetY() << "/" << tn1->GetY() << " dy2=" << t2->GetY() << "/" << tn2->GetY() << "  dy3=" << t3->GetY() << "/" << tn3->GetY() << std::endl */
+  /*           << "  dz1=" << t1->GetZ() << "/" << tn1->GetZ() << " dz2=" << t2->GetZ() << "/" << tn2->GetZ() << "  dz3=" << t3->GetZ() << "/" << tn3->GetZ() << std::endl */
+  /*           << std::endl; */
 
   delete t1,t2,t3;
   delete tn1,tn2,tn3;

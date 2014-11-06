@@ -170,7 +170,7 @@ int main(int argc, char** argv)
   farHalf.Draw(geoM);
   geoM->Draw();
   geoM->CloseGeometry();
-  geoM->Export("test.C");
+  geoM->Export("test.C"); //add "pworld_volume_27c7d40->Draw("ogle");" to the script
   //can3.SaveAs("plot.pdf");
 
   cout << endl
