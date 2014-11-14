@@ -387,10 +387,13 @@ Point* CastorHalf::GetCenterNonIP()
 {
   if (f_center_nonip != 0)
     delete f_center_nonip;
-  f_center_nonip = new Point(f_center);
+  f_center_nonip = new Point();
 
   f_center_nonip->SetZ(castorLength);
+
+  //rotate then shift, like in fitting procedure
   f_center_nonip->RotateX(f_theta);
   f_center_nonip->RotateY(f_rho);
+  f_center_nonip->Translate(f_center->GetX(),f_center->GetY(),0);
   return f_center_nonip;
 }

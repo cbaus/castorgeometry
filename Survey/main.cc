@@ -173,23 +173,23 @@ int main(int argc, char** argv)
   geoM->Export("test.C"); //add "pworld_volume_27c7d40->Draw("ogle");" to the script
   //can3.SaveAs("plot.pdf");
 
-  cout << endl
+  cout << endl << setprecision(2) << fixed << showpos
        << "***************************RESULTS*****************************" << endl
        << "* " << "Far side" << endl
-       << "* " << "x=" << farHalf.GetCenter()->GetX() << endl
-       << "* " << "y=" << farHalf.GetCenter()->GetY() << endl
-       << "* " << "theta=" << farHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
-       << "* " << "rho=" << farHalf.GetRho()/TMath::DegToRad() << " degree" << endl
-       << "* " << "x (nonIP)=" << farHalf.GetCenterNonIP()->GetX() << endl
-       << "* " << "y (nonIP)=" << farHalf.GetCenterNonIP()->GetY() << endl
+       << "* " << "x        = " << farHalf.GetCenter()->GetX() << " mm" << endl
+       << "* " << "y        = " << farHalf.GetCenter()->GetY() << " mm" << endl
+       << "* " << "theta    = " << farHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
+       << "* " << "rho      = " << farHalf.GetRho()/TMath::DegToRad() << " degree" << endl
+       << "* " << "x (nonIP)= " << farHalf.GetCenterNonIP()->GetX() << " mm" << endl
+       << "* " << "y (nonIP)= " << farHalf.GetCenterNonIP()->GetY() << " mm" << endl
        << "***************************************************************" << endl;
   cout << "* " << "Near side" << endl
-       << "* " << "x=" << nearHalf.GetCenter()->GetX() << endl
-       << "* " << "y=" << nearHalf.GetCenter()->GetY() << endl
-       << "* " << "theta=" << nearHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
-       << "* " << "rho=" << nearHalf.GetRho()/TMath::DegToRad() << " degree" << endl
-       << "* " << "x (nonIP)=" << nearHalf.GetCenterNonIP()->GetX() << endl
-       << "* " << "y (nonIP)=" << nearHalf.GetCenterNonIP()->GetY() << endl
+       << "* " << "x        = " << nearHalf.GetCenter()->GetX() << " mm" << endl
+       << "* " << "y        = " << nearHalf.GetCenter()->GetY() << " mm" << endl
+       << "* " << "theta    = " << nearHalf.GetTheta()/TMath::DegToRad() << " degree" << endl
+       << "* " << "rho      = " << nearHalf.GetRho()/TMath::DegToRad() << " degree" << endl
+       << "* " << "x (nonIP)= " << nearHalf.GetCenterNonIP()->GetX() << " mm" << endl
+       << "* " << "y (nonIP)= " << nearHalf.GetCenterNonIP()->GetY() << " mm" << endl
        << "***************************RESULTS*****************************" << endl << endl;
 
   return 0;
