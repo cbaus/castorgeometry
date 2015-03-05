@@ -49,9 +49,9 @@ class CastorHalf {
         }
       else //if near
         {
-          f_targetn1 = new Point(+92.90, +316.38, castorLength);
-          f_targetn2 = new Point(+316.38, +92.90, castorLength-1010.);
-          f_targetn3 = new Point(+316.38, -92.90, castorLength);
+          f_targetn1 = new Point(+93.36, +317.49, castorLength);
+          f_targetn2 = new Point(+317.49, +93.36, castorLength-1010.);
+          f_targetn3 = new Point(+318.51, -93.78, castorLength);
         }
     }
   ~CastorHalf()

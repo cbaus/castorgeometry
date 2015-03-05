@@ -1,7 +1,7 @@
 #ifndef _POINT_H_
 #define _POINT_H_
 #include <cmath>
-#include <assert.h> 
+#include <assert.h>
 
 class Point {
 public:
@@ -43,7 +43,7 @@ public:
     double dy = f_y - y;
     double dz = f_z - z;
     double r = this->GetDistance(p2);
-    return sigma*sqrt(r);//sqrt(4*dx*dx*sigma + 4*dy*dy*sigma + 4*dy*dy*sigma) / r;
+    return 1; //sigma*sqrt(r);//sqrt(4*dx*dx*sigma + 4*dy*dy*sigma + 4*dy*dy*sigma) / r;
   }
   Point& operator += (const Point& p);
   Point& operator = (const Point& p);
